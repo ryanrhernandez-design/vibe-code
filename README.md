@@ -1,6 +1,6 @@
-# Flappy Kitty 🐱
+# Cass' Tappy Adventure 🐱
 
-A Flappy Bird–style game starring a flying kitty, built as a single HTML5 file. No build step, no dependencies, no assets — everything (graphics and sound) is drawn and synthesized in code.
+A Flappy Bird–style game starring Cass — a green-eyed tabby with a white bib and white socks — built as a single HTML5 file. No build step, no dependencies, no assets — everything (graphics and sound) is drawn and synthesized in code.
 
 ## Play it
 
@@ -19,7 +19,7 @@ It will launch full-screen like a native app (the page includes the Apple web-ap
 ## Features
 
 - One-tap touch controls, keyboard support on desktop
-- Canvas-drawn animated kitty (flapping wing, wavy tail, X-eyes on game over)
+- Canvas-drawn cartoon Cass (tabby stripes, forehead "M", ringed tail, flapping wing, X-eyes on game over)
 - Parallax clouds, scrolling ground, yarn-spool obstacles
 - Score, persistent best score (localStorage), star burst on each point
 - Retro sound effects via WebAudio (including a little meow on game over)

@@ -6,9 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Flappy Kitty">
+<meta name="apple-mobile-web-app-title" content="Cass' Tappy">
 <meta name="theme-color" content="#87ceeb">
-<title>Flappy Kitty 🐱</title>
+<title>Cass' Tappy Adventure 🐱</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -365,19 +365,29 @@
     ctx.rotate(k.rot);
     ctx.scale(s, s);
 
-    const fur = '#f5a742';
-    const furDark = '#d88c2a';
-    const cream = '#ffe9c9';
+    // Cass: gray-brown tabby, white bib + socks, green eyes
+    const fur = '#a08c74';
+    const furDark = '#5f4f3c';
+    const cream = '#fdf7ec';
 
-    // tail (wavy)
+    // tail (wavy, with tabby rings)
+    ctx.lineCap = 'round';
+    const tw = Math.sin(k.tail) * 6;
+    const tailPath = () => {
+      ctx.beginPath();
+      ctx.moveTo(-16, 4);
+      ctx.quadraticCurveTo(-30, 0 + tw, -34, -10 + tw);
+    };
     ctx.strokeStyle = fur;
     ctx.lineWidth = 7;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-16, 4);
-    const tw = Math.sin(k.tail) * 6;
-    ctx.quadraticCurveTo(-30, 0 + tw, -34, -10 + tw);
+    tailPath();
     ctx.stroke();
+    ctx.strokeStyle = furDark;
+    ctx.lineWidth = 7;
+    ctx.setLineDash([3, 5]);
+    tailPath();
+    ctx.stroke();
+    ctx.setLineDash([]);
 
     // wing (white, flaps)
     const wingUp = -10 - kitty.wing * 16;
@@ -395,10 +405,23 @@
     ctx.ellipse(-4, 4, 16, 13, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // belly
+    // body tabby stripes
+    ctx.strokeStyle = furDark;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-14, -3); ctx.quadraticCurveTo(-12, 2, -14, 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-8, -6); ctx.quadraticCurveTo(-6, 0, -8, 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-2, -7); ctx.quadraticCurveTo(0, -2, -2, 3); ctx.stroke();
+
+    // white bib (chest)
     ctx.fillStyle = cream;
     ctx.beginPath();
-    ctx.ellipse(-2, 8, 9, 7, 0, 0, Math.PI * 2);
+    ctx.ellipse(2, 8, 9, 8, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // white front paw
+    ctx.fillStyle = cream;
+    ctx.beginPath();
+    ctx.ellipse(6, 15, 4.5, 3, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // head
@@ -423,11 +446,21 @@
     ctx.moveTo(14.5, -17.5); ctx.lineTo(17.5, -24); ctx.lineTo(19.5, -15.5);
     ctx.closePath(); ctx.fill();
 
-    // stripes
+    // forehead tabby "M"
     ctx.strokeStyle = furDark;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(-12, -4); ctx.lineTo(-7, -7); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-13, 1); ctx.lineTo(-8, -1); ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(8, -17); ctx.lineTo(8.5, -12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(12, -18); ctx.lineTo(12, -12.5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(16, -17); ctx.lineTo(15.5, -12); ctx.stroke();
+    // cheek stripes
+    ctx.beginPath(); ctx.moveTo(22, -12); ctx.lineTo(19, -10); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(23, -8); ctx.lineTo(20, -7); ctx.stroke();
+
+    // white muzzle
+    ctx.fillStyle = cream;
+    ctx.beginPath();
+    ctx.ellipse(13.5, 0, 6.5, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
 
     // eyes
     const dead = state === ST.DEAD;
@@ -437,16 +470,20 @@
       ctx.beginPath(); ctx.moveTo(6, -10); ctx.lineTo(11, -5); ctx.moveTo(11, -10); ctx.lineTo(6, -5); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(15, -10); ctx.lineTo(20, -5); ctx.moveTo(20, -10); ctx.lineTo(15, -5); ctx.stroke();
     } else {
-      ctx.fillStyle = '#3a2a16';
-      ctx.beginPath(); ctx.arc(8.5, -7.5, 2.4, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(17.5, -7.5, 2.4, 0, Math.PI * 2); ctx.fill();
+      // big green eyes like Cass
+      ctx.fillStyle = '#9db657';
+      ctx.beginPath(); ctx.arc(8.5, -7.5, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(17.5, -7.5, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#26221a';
+      ctx.beginPath(); ctx.arc(8.8, -7.3, 1.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(17.8, -7.3, 1.6, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(9.2, -8.2, 0.9, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(18.2, -8.2, 0.9, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(9.5, -8.5, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(18.5, -8.5, 1, 0, Math.PI * 2); ctx.fill();
     }
 
     // nose + mouth
-    ctx.fillStyle = '#ff7e93';
+    ctx.fillStyle = '#d98a80';
     ctx.beginPath();
     ctx.moveTo(12, -2.5); ctx.lineTo(15, -2.5); ctx.lineTo(13.5, -0.5);
     ctx.closePath(); ctx.fill();
@@ -510,8 +547,9 @@
     if (state === ST.PLAYING) {
       text(score, W / 2, safeTop + 30 * s, 52 * s);
     } else if (state === ST.READY) {
-      text('Flappy Kitty', W / 2, H * 0.22, 44 * s, '#ffd94a');
-      text('🐾', W / 2, H * 0.29, 30 * s);
+      text("Cass' Tappy", W / 2, H * 0.19, 40 * s, '#ffd94a');
+      text('Adventure', W / 2, H * 0.26, 40 * s, '#ffd94a');
+      text('🐾', W / 2, H * 0.32, 26 * s);
       text('Tap to flap!', W / 2, H * 0.62, 26 * s);
       if (best > 0) text(`Best: ${best}`, W / 2, H * 0.68, 20 * s, '#ffe9c9');
     } else if (state === ST.DEAD) {
