@@ -22,5 +22,8 @@ It will launch full-screen like a native app (the page includes the Apple web-ap
 - Canvas-drawn cartoon Cass (tabby stripes, forehead "M", ringed tail, flapping wing, X-eyes on game over)
 - Parallax clouds, scrolling ground, yarn-spool obstacles
 - Score, persistent best score (localStorage), star burst on each point
+- Every 5 points: fireworks and a "Cass Loves You" heart balloon that grows and pops
+- Every 40 points: the game speeds up and the gaps tighten (shown as Level)
+- On-device leaderboard (top 10) with a saved player name — tap the name pill to rename, which updates all your existing scores
 - Retro sound effects via WebAudio (including a little meow on game over)
 - Scales to any screen size and orientation
