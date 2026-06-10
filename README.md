@@ -1,29 +1,32 @@
 # Cass' Tappy Adventure 🐱
 
-A Flappy Bird–style game starring Cass — a green-eyed tabby with a white bib and white socks — built as a single HTML5 file. No build step, no dependencies, no assets — everything (graphics and sound) is drawn and synthesized in code.
+A Flappy Bird–style adventure starring Cass — a green-eyed tabby with a white bib and white socks — built as a single HTML5 file. No build step, no dependencies, no assets: all graphics and sound are drawn and synthesized in code.
 
-## Play it
+**Play:** https://ryanrhernandez-design.github.io/vibe-code/
 
-Open `index.html` in any browser. Tap (or press Space / ↑) to flap. Dodge the yarn-spool towers.
+## The adventure
 
-## Playing on iPhone (recommended setup)
+Five levels, each with its own world, rules, music, and ending cinematic — survive to 150 points to win:
 
-HTML5 in Safari is the best format for this — no App Store needed:
-
-1. Host `index.html` anywhere (easiest: enable **GitHub Pages** for this repo under Settings → Pages, or use Netlify/Vercel drag-and-drop).
-2. Open the URL in Safari on your iPhone.
-3. Tap **Share → Add to Home Screen**.
-
-It will launch full-screen like a native app (the page includes the Apple web-app meta tags), with crisp Retina rendering, touch controls, and your best score saved on the device.
+| Level | Points | World |
+|---|---|---|
+| 1 | 0–29 | 🧶 The backyard — dodge yarn-spool towers |
+| 2 | 30–59 | 🚀 Space — Cass rides a rocket, taps fire the thrusters |
+| 3 | 60–89 | ⚔️ Samurai — slice every steel block with the katana (taps also, ahem, propel you) |
+| 4 | 90–119 | 🪩 Neon rave — gates pulse to the beat, every tap drops a bass note |
+| 5 | 120–150 | 👑 The Cass Kingdom — drifting golden gates, then the coronation |
 
 ## Features
 
-- One-tap touch controls, keyboard support on desktop
-- Canvas-drawn cartoon Cass (tabby stripes, forehead "M", ringed tail, flapping wing, X-eyes on game over)
-- Parallax clouds, scrolling ground, yarn-spool obstacles
-- Score, persistent best score (localStorage), star burst on each point
-- Every 5 points: fireworks and a "Cass Loves You" heart balloon that grows and pops
-- Every 40 points: the game speeds up and the gaps tighten (shown as Level)
-- On-device leaderboard (top 10) with a saved player name — tap the name pill to rename, which updates all your existing scores
-- Retro sound effects via WebAudio (including a little meow on game over)
-- Scales to any screen size and orientation
+- **"Cass Loves You"** — every 5 points, fireworks burst from Cass and a red heart inflates like a balloon and pops
+- **Super Saiyan Cass** — charges unlock at 15 and 75 points; tap the ⚡ button (or 2-finger tap / `S` key) for a golden transformation with 3 points of invincibility, complete with a distorted guitar riff
+- **Difficulty** steps up every 15 points (faster, tighter gaps, capped)
+- **Global cross-device leaderboard** (Firebase) with on-device fallback; your name is saved and renaming carries all your scores with you
+- Level-clear cinematics, splash screens with the new rules, a win screen, and a victory fanfare
+- Retro WebAudio sound throughout — including a meow on game over and an escalating fart song in level 3
+- `?start=N` URL parameter to jump near any level for testing (debug runs don't touch the leaderboard)
+- `admin.html` — developer dashboard of play logs (requires the Firebase database secret)
+
+## Playing on iPhone
+
+Open the link in Safari → **Share → Add to Home Screen**. It launches full-screen like a native app with touch controls and crisp Retina rendering. Deploys automatically to GitHub Pages on every push via `.github/workflows/pages.yml`.

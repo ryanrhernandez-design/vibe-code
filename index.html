@@ -7,14 +7,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cass' Tappy">
-<meta name="theme-color" content="#87ceeb">
+<meta name="theme-color" content="#6ad7f0">
 <title>Cass' Tappy Adventure 🐱</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     width: 100%; height: 100%;
     overflow: hidden;
-    background: #4ec0ca;
+    background: #6ad7f0;
     touch-action: none;
     -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none;
@@ -26,14 +26,82 @@
     height: 100vh;
     height: 100dvh;
   }
+  #nameBtn {
+    position: fixed;
+    top: max(10px, env(safe-area-inset-top));
+    left: 10px;
+    z-index: 5;
+    font: bold 14px -apple-system, "Segoe UI", Arial, sans-serif;
+    color: #fff;
+    background: rgba(13, 50, 90, 0.7);
+    border: 2px solid #ffd94a;
+    border-radius: 18px;
+    padding: 7px 14px;
+    cursor: pointer;
+  }
+  #nameOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 20, 40, 0.7);
+  }
+  #nameOverlay.open { display: flex; }
+  #nameCard {
+    background: #0d4a7a;
+    border: 3px solid #ffd94a;
+    border-radius: 16px;
+    padding: 22px;
+    width: min(82vw, 320px);
+    text-align: center;
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    color: #fff;
+  }
+  #nameCard h2 { margin-bottom: 12px; font-size: 20px; color: #ffd94a; }
+  #nameInput {
+    width: 100%;
+    font: bold 18px inherit;
+    text-align: center;
+    padding: 9px;
+    border: 2px solid #39a9d8;
+    border-radius: 10px;
+    background: #fff;
+    color: #123a5c;
+    margin-bottom: 14px;
+  }
+  #nameSave {
+    font: bold 16px inherit;
+    color: #123a5c;
+    background: #ffd94a;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 26px;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+<button id="nameBtn" type="button">👤</button>
+<div id="nameOverlay">
+  <div id="nameCard">
+    <h2>What's your name?</h2>
+    <input id="nameInput" maxlength="12" autocomplete="off" placeholder="Cass Fan">
+    <br>
+    <button id="nameSave" type="button">Save</button>
+  </div>
+</div>
 <script>
 (() => {
+  const VERSION = 'v21'; // shown on the title screen so you know which build you're playing
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
+  const nameBtn = document.getElementById('nameBtn');
+  const nameOverlay = document.getElementById('nameOverlay');
+  const nameInput = document.getElementById('nameInput');
+  const nameSave = document.getElementById('nameSave');
 
   // ---------- Sizing (crisp on Retina) ----------
   let W = 0, H = 0, dpr = 1;
@@ -53,77 +121,224 @@
 
   // ---------- Game constants (scaled to screen height) ----------
   const S = () => H / 700; // scale factor relative to a 700px-tall design
-  const GRAVITY = 1500;
-  const FLAP_VY = -480;
-  const PIPE_SPEED = 160;
-  const PIPE_GAP = 185;
-  const PIPE_W = 70;
-  const PIPE_SPACING = 240;
+  const GRAVITY = 1300;
+  const FLAP_VY = -440;
+  const CORAL_SPEED = 160;
+  const CORAL_GAP = 185;
+  const CORAL_W = 70;
+  const CORAL_SPACING = 240;
   const GROUND_H = 90;
-  const KITTY_R = 19; // collision radius
+  const CASS_R = 19; // collision radius
+  const LVL2_AT = 30;   // space rocket level
+  const LVL3_AT = 60;   // samurai level
+  const LVL4_AT = 90;   // neon rave level
+  const LVL5_AT = 120;  // royal kingdom finale
+  const WIN_AT = 150;   // beat level 5 to win the game
+
+  // dev/test shortcut: ?start=39 begins one point before level 2, etc.
+  // (debug runs don't touch the leaderboard or best score)
+  let START = 0;
+  try { START = Math.min(500, Math.max(0, +new URLSearchParams(location.search).get('start') || 0)); } catch (e) {}
+
+  // ---------- Splash screen wording (edit freely) ----------
+  const SPLASH_2 = {
+    title: 'LEVEL 2',
+    subtitle: '🚀 SPACE 🚀',
+    lines: [
+      'Cass blasts off on a rocket!',
+      'Every tap fires the thrusters',
+      'and shoots out flames.'
+    ],
+    prompt: 'Tap to blast off!'
+  };
+  const SPLASH_3 = {
+    title: 'LEVEL 3',
+    subtitle: '⚔️ SAMURAI CASS ⚔️',
+    warning: 'NEW RULES — read carefully!',
+    lines: [
+      'Cass is now a samurai.',
+      'Tap = fart to fly up 💨',
+      'and swing the katana. ⚔️',
+      'Slice EVERY steel block in two!',
+      'If a block touches you, you die.',
+      'If a block gets past you, you die!'
+    ],
+    prompt: 'Tap to accept your destiny'
+  };
+  const SPLASH_4 = {
+    title: 'LEVEL 4',
+    subtitle: '🪩 NEON RAVE 🪩',
+    lines: [
+      'Cass hits the midnight disco!',
+      'Every tap drops a bass note 🎵',
+      'The neon gates PULSE to the beat —',
+      'squeeze through when they breathe open!'
+    ],
+    prompt: 'Tap to drop the bass!'
+  };
+  const SPLASH_5 = {
+    title: 'LEVEL 5',
+    subtitle: '👑 THE CASS KINGDOM 👑',
+    warning: 'THE FINAL LEVEL!',
+    lines: [
+      'Welcome home, your majesty.',
+      'Golden gates guard the throne,',
+      'and their gaps DRIFT up and down!',
+      'Survive the royal gauntlet to be',
+      'crowned CASS #1 forever 🏆'
+    ],
+    prompt: 'Tap to claim your destiny'
+  };
+
+  // ---------- Difficulty (steps up slightly every 15 points) ----------
+  const level = () => Math.min(Math.floor(score / 15), 10);
+  const coralSpeed = () => CORAL_SPEED * (1 + 0.08 * level());
+  const coralGap = () => Math.max(CORAL_GAP - 8 * level(), 130);
 
   // ---------- State ----------
-  const ST = { READY: 0, PLAYING: 1, DEAD: 2 };
+  const ST = { READY: 0, PLAYING: 1, DEAD: 2, SPLASH: 3, WIN: 4, OUTRO: 5 };
   let state = ST.READY;
-  let kitty, pipes, score, best, t, deathT, flashT, clouds, stars, celebs;
+  let cass, corals, steels, debris, score, best, t, deathT, flashT, winT;
+  let drift, sparkles, fireworks, fwTexts, farts, molten, bgScroll;
+  let splashLevel = 2, splashT = 0;
+  let outroT = 0, outroFrom = 1, outroLanded = false, outroStart = null;
+  let outroSlashed = false, outroBeatN = -1, outroFlash = 0, outroProp = null;
+  let anemone = { x: 0 };
+  let raveNote = 0; // which bass note the next rave tap plays
+  let ssCharges = 0, ssActive = 0, ssUnlockT = 0; // super saiyan inventory & timers
   best = +(localStorage.getItem('flappyKittyBest') || 0);
 
-  // difficulty ramps up every 40 points
-  const level = () => Math.floor(score / 40);
-  const speedMult = () => 1 + Math.min(level() * 0.07, 0.56);
+  const phase = () => {
+    if (state === ST.OUTRO) return outroFrom; // keep the finished level's world during the landing
+    return score < LVL2_AT ? 1 : score < LVL3_AT ? 2 : score < LVL4_AT ? 3 : score < LVL5_AT ? 4 : 5;
+  };
 
-  // ---------- Leaderboard (stored on this device) ----------
+  // ---------- Player name + leaderboard (saved on this device) ----------
   let playerName = localStorage.getItem('cassPlayerName') || '';
-  let leaderboard;
-  try { leaderboard = JSON.parse(localStorage.getItem('cassLeaderboard')) || []; }
-  catch (e) { leaderboard = []; }
-  let nameBtn = null; // tappable rect, set while drawing UI
+  function getLB() {
+    try { return JSON.parse(localStorage.getItem('cassLeaderboard')) || []; }
+    catch (e) { return []; }
+  }
+  function saveLB(lb) {
+    localStorage.setItem('cassLeaderboard', JSON.stringify(lb));
+  }
+  function addToLB(name, sc) {
+    const lb = getLB();
+    lb.push({ name, score: sc });
+    lb.sort((a, b) => b.score - a.score);
+    saveLB(lb.slice(0, 10));
+  }
+  function setName(newName) {
+    newName = (newName || '').trim().slice(0, 12) || 'Cass Fan';
+    // renaming carries all of your existing leaderboard scores with you
+    const oldName = playerName;
+    const lb = getLB();
+    for (const e of lb) if (e.name === oldName) e.name = newName;
+    saveLB(lb);
+    playerName = newName;
+    localStorage.setItem('cassPlayerName', newName);
+    nameBtn.textContent = '👤 ' + newName;
+    renameRemote(oldName, newName);
+  }
 
-  function saveLeaderboard() {
-    localStorage.setItem('cassLeaderboard', JSON.stringify(leaderboard));
+  // ---------- Cross-device leaderboard (Firebase Realtime DB over REST) ----------
+  // Set to a Firebase Realtime Database URL, e.g.
+  // 'https://royal-nemo-default-rtdb.firebaseio.com' — empty = this device only.
+  const REMOTE_DB = 'https://royal-nemo-default-rtdb.firebaseio.com';
+  let remoteLB = null; // latest fetched global top-10
+
+  function lbTop() {
+    return remoteLB || getLB();
   }
-  function askName(msg) {
-    return (window.prompt(msg, playerName) || '').trim().slice(0, 16);
+  async function refreshRemoteLB() {
+    if (!REMOTE_DB) return;
+    try {
+      const res = await fetch(REMOTE_DB + '/scores.json');
+      const data = await res.json() || {};
+      const all = Object.values(data).filter(e => e && e.name && typeof e.score === 'number');
+      all.sort((a, b) => b.score - a.score);
+      remoteLB = all.slice(0, 10);
+    } catch (e) { /* offline: keep showing the last list we had */ }
   }
-  function changeName() {
-    const n = askName('Enter your name (this updates all your leaderboard scores):');
-    if (!n || n === playerName) return;
-    for (const e of leaderboard) if (e.name === playerName) e.name = n;
-    playerName = n;
-    localStorage.setItem('cassPlayerName', n);
-    saveLeaderboard();
+  function pushRemoteScore(name, sc) {
+    if (!REMOTE_DB) return;
+    fetch(REMOTE_DB + '/scores.json', {
+      method: 'POST',
+      body: JSON.stringify({ name, score: sc, ts: Date.now() })
+    }).then(refreshRemoteLB).catch(() => {});
   }
-  function recordScore() {
-    if (score <= 0) return;
-    if (!playerName) {
-      playerName = askName('You made the leaderboard! What\'s your name?') || 'Cass Fan';
-      localStorage.setItem('cassPlayerName', playerName);
+  async function renameRemote(oldName, newName) {
+    if (!REMOTE_DB || !oldName || oldName === newName) return;
+    try {
+      const res = await fetch(REMOTE_DB + '/scores.json');
+      const data = await res.json() || {};
+      const updates = {};
+      for (const [k, e] of Object.entries(data)) {
+        if (e && e.name === oldName) updates[k + '/name'] = newName;
+      }
+      if (Object.keys(updates).length) {
+        await fetch(REMOTE_DB + '/scores.json', { method: 'PATCH', body: JSON.stringify(updates) });
+      }
+      refreshRemoteLB();
+    } catch (e) { /* offline */ }
+  }
+
+  // ---------- Ambient particles (bubbles / stars / petals per level) ----------
+  function initAmbient() {
+    drift = [];
+    const ph = phase();
+    if (ph === 1) {
+      // fluffy clouds drifting across the backyard sky
+      for (let i = 0; i < 7; i++) {
+        drift.push({ x: Math.random() * W, y: Math.random() * H * 0.55, s: (0.5 + Math.random()) * S(), v: 10 + Math.random() * 18 });
+      }
+    } else if (ph === 2) {
+      for (let i = 0; i < 30; i++) {
+        drift.push({ x: Math.random() * W, y: Math.random() * H, s: (0.3 + Math.random()) * S(), v: 8 + Math.random() * 20, tw: Math.random() * 7 });
+      }
+    } else if (ph === 4) {
+      // glowing rave orbs floating up
+      for (let i = 0; i < 16; i++) {
+        drift.push({ x: Math.random() * W, y: Math.random() * H, s: (0.4 + Math.random()) * S(), v: 14 + Math.random() * 22, hue: Math.random() * 360 });
+      }
+    } else if (ph === 5) {
+      // royal confetti raining down
+      for (let i = 0; i < 22; i++) {
+        drift.push({ x: Math.random() * W, y: Math.random() * H, s: (0.4 + Math.random()) * S(), v: 30 + Math.random() * 40, hue: Math.random() * 360, sw: Math.random() * 7 });
+      }
+    } else {
+      for (let i = 0; i < 14; i++) {
+        drift.push({ x: Math.random() * W, y: Math.random() * H, s: (0.4 + Math.random()) * S(), v: 22 + Math.random() * 24, sw: Math.random() * 7 });
+      }
     }
-    leaderboard.push({ name: playerName, score });
-    leaderboard.sort((a, b) => b.score - a.score);
-    if (leaderboard.length > 10) leaderboard.length = 10;
-    saveLeaderboard();
   }
 
   function reset() {
-    kitty = { x: W * 0.3, y: H * 0.45, vy: 0, rot: 0, wing: 0, tail: 0 };
-    pipes = [];
-    score = 0;
+    cass = { x: W * 0.3, y: H * 0.45, vy: 0, rot: 0, fin: 0, tail: 0, flame: 0, slice: 0 };
+    corals = [];
+    steels = [];
+    debris = [];
+    score = START;
     t = 0;
     deathT = 0;
     flashT = 0;
-    clouds = [];
-    for (let i = 0; i < 6; i++) {
-      clouds.push({
-        x: Math.random() * W,
-        y: Math.random() * H * 0.5,
-        s: (0.5 + Math.random()) * S(),
-        v: 10 + Math.random() * 18
-      });
-    }
-    stars = []; // celebration particles on point scored
-    celebs = []; // "Cass Loves You" heart-balloon celebrations
+    winT = 0;
+    splashT = 0;
+    fireworks = [];
+    fwTexts = [];
+    sparkles = [];
+    farts = [];
+    molten = [];
+    bgScroll = 0;
+    // debug starts get the charges they would have earned along the way
+    ssCharges = (START >= 15 ? 1 : 0) + (START >= 75 ? 1 : 0);
+    ssActive = 0;
+    ssUnlockT = 0;
+    clearTimeout(ssLoopTimer);
+    if (ssGain) ssGain.gain.value = 0;
+    initAmbient();
     state = ST.READY;
+    refreshRemoteLB(); // keep the global top-10 fresh between runs
   }
 
   // ---------- Sound (tiny WebAudio bleeps, no assets) ----------
@@ -143,214 +358,444 @@
     } catch (e) { /* audio is optional */ }
   }
   const sndFlap = () => beep(500, 0.08, 'triangle', 0.1, 800);
-  const sndScore = () => { beep(880, 0.08, 'square', 0.06); setTimeout(() => beep(1320, 0.12, 'square', 0.06), 80); };
-  const sndHit = () => beep(220, 0.25, 'sawtooth', 0.12, 60);
+  const sndRocket = () => beep(160, 0.18, 'sawtooth', 0.1, 60);
+  function fart(dur = 0.3, freq = 160, vol = 0.3) {
+    // real fart synthesis: sputtery noise bursts (lip flaps) squeezed
+    // through a resonant low-pass filter
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      const n = Math.floor(actx.sampleRate * dur);
+      const buf = actx.createBuffer(1, n, actx.sampleRate);
+      const d = buf.getChannelData(0);
+      let flap = 0, open = true;
+      for (let i = 0; i < n; i++) {
+        if (--flap <= 0) {
+          open = Math.random() < 0.72;
+          flap = (0.005 + Math.random() * 0.014) * actx.sampleRate; // 5-19ms flaps
+        }
+        d[i] = (Math.random() * 2 - 1) * (open ? 1 : 0.12);
+      }
+      const src = actx.createBufferSource();
+      src.buffer = buf;
+      const lp = actx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.Q.value = 9; // resonance gives it the honk
+      lp.frequency.setValueAtTime(freq * 2.4, actx.currentTime);
+      lp.frequency.exponentialRampToValueAtTime(freq * 0.7, actx.currentTime + dur);
+      const g = actx.createGain();
+      g.gain.setValueAtTime(vol, actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+      src.connect(lp); lp.connect(g); g.connect(actx.destination);
+      src.start();
+    } catch (e) { /* audio is optional */ }
+  }
+  const sndFart = () => fart(0.22 + Math.random() * 0.18, 110 + Math.random() * 110, 0.32);
+  const sndFartSong = (fancy) => {
+    // a melody of farts; longer and fancier as the score climbs
+    const tune = [120, 150, 120, 180, 160, 200, 180, 230, 200, 260, 230, 290];
+    const n = Math.min(4 + fancy * 2, tune.length);
+    for (let i = 0; i < n; i++) {
+      setTimeout(() => fart(0.16, tune[i], 0.24), i * 190);
+    }
+    // long ripping finale on the fancier renditions
+    if (fancy >= 2) setTimeout(() => fart(0.9, 85, 0.34), n * 190);
+  };
+  const sndSlice = () => beep(900, 0.1, 'sine', 0.09, 180);
+  const sndSizzle = () => beep(1500, 0.2, 'sawtooth', 0.04, 200);
+  const sndScore = () => { beep(880, 0.08, 'triangle', 0.07); setTimeout(() => beep(1320, 0.12, 'triangle', 0.07), 80); };
+  const sndHit = () => beep(180, 0.3, 'sawtooth', 0.12, 50);
   const sndMeow = () => beep(700, 0.18, 'triangle', 0.09, 350);
   const sndPop = () => { beep(950, 0.06, 'square', 0.14, 120); setTimeout(() => beep(180, 0.1, 'sawtooth', 0.08, 60), 30); };
-  const sndLove = () => { beep(660, 0.1, 'triangle', 0.08); setTimeout(() => beep(880, 0.1, 'triangle', 0.08), 90); setTimeout(() => beep(1100, 0.16, 'triangle', 0.08), 180); };
+  const sndFireworks = () => {
+    beep(523, 0.12, 'triangle', 0.08);
+    setTimeout(() => beep(659, 0.12, 'triangle', 0.08), 100);
+    setTimeout(() => beep(784, 0.12, 'triangle', 0.08), 200);
+    setTimeout(() => beep(1046, 0.25, 'triangle', 0.09), 300);
+  };
+  const RAVE_SCALE = [110, 131, 147, 165, 196, 220, 196, 165];
+  const sndRave = () => {
+    // each tap plays the next note of a bass riff — the player makes the music
+    const f = RAVE_SCALE[raveNote++ % RAVE_SCALE.length];
+    beep(f, 0.18, 'sawtooth', 0.13, f * 0.5);
+    beep(f * 2, 0.09, 'square', 0.05);
+  };
+  const sndTrumpet = () => {
+    // regal brass blast: two detuned saws + a sub note
+    const f = [392, 523, 587, 659][Math.floor(Math.random() * 4)];
+    beep(f, 0.22, 'sawtooth', 0.09);
+    beep(f * 1.006, 0.22, 'sawtooth', 0.07);
+    beep(f / 2, 0.22, 'square', 0.04);
+  };
+  const sndKick = () => beep(130, 0.12, 'sine', 0.2, 40);
+  const sndSSUnlock = () => {
+    [262, 330, 392, 523, 659, 784].forEach((f, i) => setTimeout(() => beep(f, 0.12, 'square', 0.07), i * 70));
+  };
+  let ssGain = null, ssLoopTimer = null;
+  function ssMasterGain() {
+    // the sustain riff routes through this so its volume can track ssActive
+    if (!ssGain) {
+      ssGain = actx.createGain();
+      ssGain.gain.value = 1;
+      ssGain.connect(actx.destination);
+    }
+    return ssGain;
+  }
+  function gtr(f, at, dur = 0.18, vol = 0.16, slide = 0, sustain = false) {
+    // distorted power chord: detuned saws + fifth + octave through a tanh waveshaper
+    setTimeout(() => {
+      try {
+        if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+        if (actx.state === 'suspended') actx.resume();
+        const ws = actx.createWaveShaper();
+        const curve = new Float32Array(256);
+        for (let i = 0; i < 256; i++) curve[i] = Math.tanh(((i / 128) - 1) * 6);
+        ws.curve = curve;
+        const lp = actx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 2400;
+        const g = actx.createGain();
+        g.gain.setValueAtTime(vol, actx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+        [1, 1.004, 1.5, 2].forEach(m => {
+          const o = actx.createOscillator();
+          o.type = 'sawtooth';
+          o.frequency.setValueAtTime(f * m, actx.currentTime);
+          if (slide) o.frequency.exponentialRampToValueAtTime(slide * m, actx.currentTime + dur);
+          o.connect(ws);
+          o.start();
+          o.stop(actx.currentTime + dur);
+        });
+        ws.connect(lp); lp.connect(g);
+        g.connect(sustain ? ssMasterGain() : actx.destination);
+      } catch (e) { /* audio is optional */ }
+    }, at);
+  }
+  function ssRiffBar() {
+    // one bar of galloping power chords; loops for as long as he's transformed,
+    // fading as the power runs out (ssGain tracks ssActive in update)
+    if (ssActive <= 0) return;
+    const P = (f, at, dur = 0.13, vol = 0.15, slide = 0) => gtr(f, at, dur, vol, slide, true);
+    P(82, 0); P(82, 140); P(98, 280, 0.15);
+    P(82, 420); P(110, 560, 0.15);
+    P(82, 700); P(123, 840, 0.18);
+    P(98, 1020, 0.15);
+    P(110, 1160, 0.22, 0.15, 104); // little dive at the turnaround
+    ssLoopTimer = setTimeout(ssRiffBar, 1400);
+  }
+  const sndSSGo = () => {
+    // power-up roar, pick-scrape riser, gallop, then a screaming octave bend
+    beep(60, 1.6, 'sawtooth', 0.12, 800);
+    gtr(55, 0, 0.5, 0.12, 220); // pick scrape climbing the strings
+    gtr(82, 450, 0.12); gtr(82, 580, 0.12); gtr(98, 710, 0.14);
+    gtr(110, 850, 0.14); gtr(123, 990, 0.16);
+    gtr(147, 1130, 0.2);
+    gtr(165, 1330, 0.7, 0.17, 330); // the scream
+    setTimeout(() => beep(1568, 0.5, 'triangle', 0.06, 3000), 1330);
+    // hand off to the sustain loop once the intro lands
+    clearTimeout(ssLoopTimer);
+    ssLoopTimer = setTimeout(ssRiffBar, 2100);
+  };
+  const sndVictory = () => {
+    // the coronation theme (~6s): fanfare, answer, grand held finale
+    const N = (f, at, d = 0.16, v = 0.09) => setTimeout(() => {
+      beep(f, d, 'sawtooth', v);
+      beep(f * 1.006, d, 'sawtooth', v * 0.7);
+      beep(f / 2, d, 'triangle', v * 0.6);
+    }, at);
+    N(392, 0); N(523, 150); N(659, 300); N(784, 450, 0.3);
+    N(659, 800); N(784, 950); N(880, 1100, 0.3);
+    N(784, 1500, 0.2); N(880, 1700, 0.2); N(1047, 1900, 0.9, 0.1);
+    N(880, 3100); N(1047, 3250); N(1175, 3400, 0.3);
+    N(1319, 3800, 1.2, 0.11);
+    setTimeout(() => {
+      beep(523, 1.8, 'triangle', 0.08);
+      beep(659, 1.8, 'triangle', 0.07);
+      beep(784, 1.8, 'triangle', 0.07);
+      beep(1047, 1.8, 'triangle', 0.08);
+    }, 5200);
+  };
+  const sndOutro = (lvl) => {
+    if (lvl === 1) {
+      // cheerful little victory ditty
+      [392, 523, 660, 880].forEach((f, i) => setTimeout(() => beep(f, 0.14, 'sine', 0.09, f * 1.4), i * 120));
+    } else if (lvl === 2) {
+      // engines spooling to full burn, then twinkles as he leaves the screen
+      beep(50, 2.2, 'sawtooth', 0.12, 320);
+      setTimeout(() => [1047, 1319, 1568, 2093].forEach((f, i) => setTimeout(() => beep(f, 0.2, 'triangle', 0.07), i * 120)), 1300);
+    } else if (lvl === 3) {
+      beep(55, 2.0, 'sine', 0.09); // tense drone before the slash
+    } else if (lvl === 4) {
+      beep(300, 0.9, 'sawtooth', 0.13, 40); // the drop hits, beats follow
+    } else {
+      sndVictory();
+    }
+  };
+
+  const snd1Up = () => {
+    // quick rising arpeggio, 1-up-mushroom style
+    const seq = [659, 784, 1319, 1047, 1175, 1568];
+    seq.forEach((f, i) => setTimeout(() => beep(f, 0.13, 'square', 0.06), i * 85));
+  };
+  const sndChest = () => {
+    // treasure-chest fanfare: chromatic suspense rise, then a big held chord
+    const rise = [440, 466, 494, 523, 554, 587];
+    rise.forEach((f, i) => setTimeout(() => beep(f, 0.1, 'triangle', 0.06), i * 90));
+    setTimeout(() => {
+      beep(659, 0.8, 'square', 0.05);
+      beep(831, 0.8, 'square', 0.045);
+      beep(988, 0.8, 'square', 0.045);
+      beep(1319, 0.8, 'triangle', 0.06);
+    }, 560);
+  };
 
   // ---------- Input ----------
-  function flap() {
+  // developer-only play log: one entry per finished run, written to a node
+  // the public can't read (viewable on the admin dashboard / Firebase console)
+  function logPlay(finalScore) {
+    if (!REMOTE_DB || START) return;
+    try {
+      fetch(REMOTE_DB + '/plays.json', {
+        method: 'POST',
+        body: JSON.stringify({ name: playerName, ts: Date.now(), v: VERSION, score: finalScore, lvl: phase() })
+      }).catch(() => {});
+    } catch (e) { /* logging is best-effort */ }
+  }
+  function tapAction() {
+    if (nameOverlay.classList.contains('open')) return;
     if (state === ST.READY) {
       state = ST.PLAYING;
-      kitty.vy = FLAP_VY * S();
-      sndFlap();
+      cass.vy = FLAP_VY * S();
+      doTapFx();
     } else if (state === ST.PLAYING) {
-      kitty.vy = FLAP_VY * S();
-      kitty.wing = 1;
-      sndFlap();
+      cass.vy = FLAP_VY * S();
+      cass.fin = 1;
+      doTapFx();
+    } else if (state === ST.SPLASH) {
+      if (splashT > 0.8) resumeFromSplash(); // must read the screen first
     } else if (state === ST.DEAD && deathT > 0.6) {
+      reset();
+    } else if (state === ST.WIN && winT > 1) {
       reset();
     }
   }
-  function pointerDown(x, y) {
-    if (nameBtn && (state === ST.READY || state === ST.DEAD) &&
-        x >= nameBtn.x && x <= nameBtn.x + nameBtn.w &&
-        y >= nameBtn.y && y <= nameBtn.y + nameBtn.h) {
-      changeName();
-      return;
+  function doTapFx() {
+    const ph = phase();
+    if (ph === 2) {
+      cass.flame = 1;
+      sndRocket();
+    } else if (ph === 3) {
+      cass.slice = 0.25;
+      spawnFart();
+      sndFart();
+      sndSlice();
+    } else if (ph === 4) {
+      sndRave();
+      burstParticles(cass.x, cass.y, ['#00ffd0', '#ff00d0', '#ffe600'], 6, 0.6);
+    } else if (ph === 5) {
+      sndTrumpet();
+      burstParticles(cass.x, cass.y, ['#ffd94a', '#fff'], 5, 0.5);
+    } else {
+      sndFlap();
     }
-    flap();
   }
+  const onUI = e => e.target !== canvas; // taps on the name button/overlay don't count
   window.addEventListener('touchstart', e => {
+    if (onUI(e)) return;
     e.preventDefault();
-    const tp = e.changedTouches[0];
-    pointerDown(tp.clientX, tp.clientY);
+    if (e.touches && e.touches.length >= 2) { activateSS(); return; } // 2-finger tap transforms
+    const tch = e.touches && e.touches[0];
+    if (tch && tryActivateAt(tch.clientX, tch.clientY)) return; // tapping the ⚡ button transforms
+    tapAction();
   }, { passive: false });
-  window.addEventListener('mousedown', e => pointerDown(e.clientX, e.clientY));
+  window.addEventListener('mousedown', e => {
+    if (onUI(e)) return;
+    if (tryActivateAt(e.clientX, e.clientY)) return;
+    tapAction();
+  });
   window.addEventListener('keydown', e => {
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); flap(); }
+    if (document.activeElement === nameInput) return;
+    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); tapAction(); }
+    if (e.code === 'KeyS') { e.preventDefault(); activateSS(); }
   });
 
-  // ---------- Pipes ----------
-  function spawnPipe(x) {
+  // ---------- Name button + overlay ----------
+  function openNameOverlay() {
+    nameInput.value = playerName;
+    nameOverlay.classList.add('open');
+    setTimeout(() => nameInput.focus(), 50);
+  }
+  function closeNameOverlay() {
+    setName(nameInput.value);
+    nameOverlay.classList.remove('open');
+    nameInput.blur();
+  }
+  nameBtn.addEventListener('click', openNameOverlay);
+  nameSave.addEventListener('click', closeNameOverlay);
+  nameInput.addEventListener('keydown', e => { if (e.code === 'Enter') closeNameOverlay(); });
+  if (playerName) {
+    nameBtn.textContent = '👤 ' + playerName;
+  } else {
+    setName('Cass Fan');
+    openNameOverlay(); // first visit: ask for a name
+  }
+
+  // ---------- Level transitions ----------
+  // Each level ends with its own cinematic, escalating in drama:
+  // 1 loop-the-loop, 2 blast-off, 3 monolith slash, 4 encore beat drop,
+  // 5 the full coronation onto the golden anemone throne.
+  const OUTRO_LENS = { 1: 2.4, 2: 3.4, 3: 4.6, 4: 5.6, 5: 9.5 };
+  function startOutro(finishedLvl) {
+    state = ST.OUTRO;
+    outroT = 0;
+    outroFrom = finishedLvl;
+    outroLanded = false;
+    outroSlashed = false;
+    outroBeatN = -1;
+    outroFlash = 0;
+    outroStart = { x: cass.x, y: cass.y };
+    anemone.x = W * 0.62;
+    corals = [];
+    steels = [];
+    if (finishedLvl === 3) {
+      // the final monolith awaits one perfect slash
+      const s = S();
+      outroProp = { x: W + 120 * s, y: H * 0.26, w: 95 * s, h: H * 0.36 };
+    } else {
+      outroProp = null;
+    }
+    sndOutro(finishedLvl);
+  }
+  function startSplash(lvl) {
+    state = ST.SPLASH;
+    splashLevel = lvl;
+    splashT = 0;
+    initAmbient(); // switch backdrop particles to the new level's theme
+    sndChest();
+  }
+  function resumeFromSplash() {
+    corals = [];
+    steels = [];
+    debris = [];
+    molten = [];
+    farts = [];
+    cass.x = W * 0.3;
+    cass.y = H * 0.45;
+    cass.vy = 0;
+    cass.rot = 0;
+    state = ST.PLAYING;
+  }
+
+  // ---------- Super Saiyan power ----------
+  function activateSS() {
+    if (state !== ST.PLAYING || ssActive > 0 || ssCharges <= 0) return;
+    ssCharges--;
+    ssActive = 3; // invincible for the next 3 points
+    if (ssGain) ssGain.gain.value = 1; // riff comes back at full power
+    sndSSGo();
+    burstParticles(cass.x, cass.y, ['#ffe34d', '#ffffff', '#ffd94a'], 30, 1.3);
+  }
+  function ssButton() {
     const s = S();
-    const gap = Math.max(PIPE_GAP - level() * 7, 130) * s;
-    const margin = 70 * s;
-    const groundY = H - GROUND_H * s;
-    const gapY = margin + Math.random() * (groundY - margin * 2 - gap);
-    pipes.push({ x, gapY, gap, scored: false });
+    return { x: W - 48 * s, y: H - GROUND_H * s - 54 * s, r: 30 * s };
+  }
+  function tryActivateAt(cx, cy) {
+    if (ssCharges > 0 && ssActive === 0 && state === ST.PLAYING) {
+      const b = ssButton();
+      const dx = cx - b.x, dy = cy - b.y;
+      if (dx * dx + dy * dy < b.r * b.r * 1.7) { activateSS(); return true; }
+    }
+    return false;
   }
 
-  // ---------- Update ----------
-  function update(dt) {
+  function onScore() {
+    score++;
+    sndScore();
+    burstSparkles();
+    if (ssActive > 0) ssActive--; // the transformation burns one point per point
+    if (score === 15 || score === 75) {
+      ssCharges++;
+      ssUnlockT = 4;
+      sndSSUnlock();
+    }
+    if (score === LVL2_AT) { startOutro(1); return; }
+    if (score === LVL3_AT) { startOutro(2); return; }
+    if (score === LVL4_AT) { startOutro(3); return; }
+    if (score === LVL5_AT) { startOutro(4); return; }
+    if (score >= WIN_AT) { startOutro(5); return; }
+    const difficultyStep = score % 15 === 0;
+    if (difficultyStep) snd1Up();
+    if (score % 5 === 0) {
+      launchFireworks(!difficultyStep); // 1-up replaces the jingle
+      launchHeart();
+      // samurai level: layer an ever-fancier fart song on top
+      if (phase() === 3) sndFartSong(Math.min(Math.floor((score - LVL3_AT) / 5), 4));
+    }
+  }
+
+  function burstParticles(x, y, colors, n = 20, speed = 1) {
     const s = S();
-    t += dt;
-
-    for (const c of clouds) {
-      c.x -= c.v * dt * (state === ST.DEAD ? 0.3 : 1);
-      if (c.x < -120 * c.s) { c.x = W + 120 * c.s; c.y = Math.random() * H * 0.5; }
-    }
-
-    kitty.tail += dt * 6;
-
-    if (state === ST.READY) {
-      kitty.y = H * 0.45 + Math.sin(t * 3) * 12 * s;
-      kitty.wing = (Math.sin(t * 8) + 1) / 2;
-      return;
-    }
-
-    if (state === ST.DEAD) {
-      deathT += dt;
-      flashT = Math.max(0, flashT - dt * 3);
-      // fall to the ground
-      const groundY = H - GROUND_H * s;
-      if (kitty.y < groundY - KITTY_R * s) {
-        kitty.vy += GRAVITY * s * dt;
-        kitty.y += kitty.vy * dt;
-        kitty.rot = Math.min(kitty.rot + dt * 6, Math.PI / 2);
-        if (kitty.y > groundY - KITTY_R * s) kitty.y = groundY - KITTY_R * s;
-      }
-      updateStars(dt);
-      updateCelebs(dt);
-      return;
-    }
-
-    // PLAYING
-    kitty.vy += GRAVITY * s * dt;
-    kitty.y += kitty.vy * dt;
-    kitty.rot = Math.max(-0.45, Math.min(1.2, kitty.vy / (600 * s)));
-    kitty.wing = Math.max(0, kitty.wing - dt * 4);
-
-    // pipes
-    for (const p of pipes) p.x -= PIPE_SPEED * s * dt * speedMult();
-    if (pipes.length === 0 || pipes[pipes.length - 1].x < W - PIPE_SPACING * s) {
-      spawnPipe(Math.max(W + 40, pipes.length ? pipes[pipes.length - 1].x + PIPE_SPACING * s : W + 40));
-    }
-    while (pipes.length && pipes[0].x < -PIPE_W * s - 20) pipes.shift();
-
-    const r = KITTY_R * s;
-    const groundY = H - GROUND_H * s;
-
-    // score + collisions
-    for (const p of pipes) {
-      const pw = PIPE_W * s;
-      if (!p.scored && p.x + pw < kitty.x) {
-        p.scored = true;
-        score++;
-        sndScore();
-        burstStars();
-        if (score % 5 === 0) celebrate();
-        if (score % 40 === 0) {
-          celebs.push({ x: kitty.x, y: kitty.y, t: 0.2, popped: true, heart: false, msg: 'Level up — faster!' });
-        }
-      }
-      // circle vs pipe rects
-      if (kitty.x + r > p.x && kitty.x - r < p.x + pw) {
-        if (kitty.y - r < p.gapY || kitty.y + r > p.gapY + p.gap) {
-          die();
-          break;
-        }
-      }
-    }
-
-    // ground & ceiling
-    if (kitty.y + r > groundY) { kitty.y = groundY - r; die(); }
-    if (kitty.y - r < 0) { kitty.y = r; kitty.vy = 50; }
-
-    updateStars(dt);
-    updateCelebs(dt);
-  }
-
-  function die() {
-    if (state === ST.DEAD) return;
-    state = ST.DEAD;
-    flashT = 1;
-    kitty.vy = Math.min(kitty.vy, 0);
-    sndHit();
-    setTimeout(sndMeow, 250);
-    if (score > best) {
-      best = score;
-      localStorage.setItem('flappyKittyBest', best);
-    }
-    recordScore();
-  }
-
-  function burstStars() {
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
-      stars.push({
-        x: kitty.x, y: kitty.y,
-        vx: Math.cos(a) * (60 + Math.random() * 120),
-        vy: Math.sin(a) * (60 + Math.random() * 120) - 60,
-        life: 0.6 + Math.random() * 0.3
+      const sp = (60 + Math.random() * 160) * s * speed;
+      fireworks.push({
+        x, y,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: 0.7 + Math.random() * 0.5,
+        color: colors[i % colors.length]
       });
     }
   }
-  function updateStars(dt) {
-    for (const st of stars) {
-      st.x += st.vx * dt;
-      st.y += st.vy * dt;
-      st.vy += 400 * dt;
-      st.life -= dt;
-    }
-    stars = stars.filter(st => st.life > 0);
-  }
 
-  // ---------- "Cass Loves You" celebration (every 5 points) ----------
-  const FW_COLORS = ['#ff5a6e', '#ffd94a', '#7be0ff', '#b78aff', '#8df0a0'];
-  function celebrate() {
-    // fireworks bursting out of Cass
-    for (let b = 0; b < 3; b++) {
-      const a0 = Math.random() * Math.PI * 2;
-      const color = FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)];
-      for (let i = 0; i < 14; i++) {
-        const a = a0 + (i / 14) * Math.PI * 2;
-        const sp = 120 + Math.random() * 180;
-        stars.push({
-          x: kitty.x, y: kitty.y,
-          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 50,
-          life: 0.7 + Math.random() * 0.5, color
-        });
-      }
-    }
-    celebs.push({ x: kitty.x, y: kitty.y, t: 0, popped: false, heart: true, msg: 'Cass Loves You' });
-    sndLove();
-  }
-
-  function updateCelebs(dt) {
+  // ---------- Fireworks + "Cass Loves You" heart balloon (every 5 points) ----------
+  function launchFireworks(jingle = true) {
+    if (jingle) sndFireworks();
     const s = S();
-    for (const c of celebs) {
-      c.t += dt;
-      c.y -= 26 * s * dt; // drifts up like a balloon
-      if (c.heart && !c.popped && c.t > 1.0) {
-        c.popped = true;
+    const colors = ['#ffd94a', '#ff8c2e', '#ffffff', '#ff5c8a'];
+    for (let i = 0; i < 26; i++) {
+      const a = (i / 26) * Math.PI * 2 + Math.random() * 0.3;
+      const sp = (90 + Math.random() * 180) * s;
+      fireworks.push({
+        x: cass.x, y: cass.y,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: 0.9 + Math.random() * 0.5,
+        color: colors[i % colors.length]
+      });
+    }
+  }
+  function launchHeart() {
+    // a red heart inflates from Cass like a balloon, then pops into shards
+    fwTexts.push({ x: cass.x, y: cass.y, t: 0, popped: false });
+  }
+  function updateFireworks(dt) {
+    const s = S();
+    for (const f of fireworks) {
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.vx *= 1 - dt * 1.2;
+      f.vy = f.vy * (1 - dt * 1.2) - 60 * dt;
+      f.life -= dt;
+    }
+    fireworks = fireworks.filter(f => f.life > 0);
+    for (const ft of fwTexts) {
+      ft.t += dt;
+      ft.y -= 26 * s * dt; // drifts up like a balloon
+      if (!ft.popped && ft.t > 1.0) {
+        ft.popped = true;
         sndPop();
-        // heart pops into little heart shards
         for (let i = 0; i < 10; i++) {
           const a = Math.random() * Math.PI * 2;
-          const sp = 90 + Math.random() * 140;
-          stars.push({
-            x: c.x, y: c.y - 34 * s,
-            vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40,
+          const sp = (90 + Math.random() * 140) * s;
+          fireworks.push({
+            x: ft.x, y: ft.y - 34 * s,
+            vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40 * s,
             life: 0.5 + Math.random() * 0.3, color: '#e8333f', heart: true
           });
         }
       }
     }
-    celebs = celebs.filter(c => c.t < 1.7);
+    fwTexts = fwTexts.filter(ft => ft.t < 1.7);
   }
-
   function drawHeart(x, y, r, color) {
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -358,51 +803,633 @@
     ctx.bezierCurveTo(x - r * 1.25, y + r * 0.2, x - r * 0.95, y - r * 0.85, x, y - r * 0.3);
     ctx.bezierCurveTo(x + r * 0.95, y - r * 0.85, x + r * 1.25, y + r * 0.2, x, y + r * 0.95);
     ctx.fill();
-    // balloon shine
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.beginPath();
-    ctx.ellipse(x - r * 0.4, y - r * 0.35, r * 0.18, r * 0.28, -0.5, 0, Math.PI * 2);
-    ctx.fill();
   }
-
-  function drawCelebs() {
+  function drawFireworks() {
     const s = S();
-    for (const c of celebs) {
-      const cx = Math.max(90 * s, Math.min(W - 90 * s, c.x));
-      if (c.heart && !c.popped) {
-        // inflating like a balloon, with a wobble
-        const grow = 0.25 + c.t * 1.6;
-        const wob = 1 + Math.sin(c.t * 20) * 0.05;
-        drawHeart(cx, c.y - 34 * s, 15 * s * grow * wob, '#e8333f');
+    for (const f of fireworks) {
+      ctx.globalAlpha = Math.min(1, f.life * 1.5);
+      if (f.heart) {
+        drawHeart(f.x, f.y, 4.5 * s, f.color);
+      } else {
+        ctx.fillStyle = f.color;
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, 3 * s * Math.min(1, f.life + 0.3), 0, Math.PI * 2);
+        ctx.fill();
       }
-      const fade = c.t < 1.3 ? 1 : Math.max(0, (1.7 - c.t) / 0.4);
-      ctx.globalAlpha = fade;
-      text(c.msg, cx, c.y - 72 * s - c.t * 14 * s, 21 * s, '#ff8da0');
+    }
+    ctx.globalAlpha = 1;
+    for (const ft of fwTexts) {
+      const cx = Math.max(90 * s, Math.min(W - 90 * s, ft.x));
+      if (!ft.popped) {
+        // inflating like a balloon, with a wobble and a shine
+        const grow = 0.25 + ft.t * 1.6;
+        const wob = 1 + Math.sin(ft.t * 20) * 0.05;
+        const r = 15 * s * grow * wob;
+        drawHeart(cx, ft.y - 34 * s, r, '#e8333f');
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.beginPath();
+        ctx.ellipse(cx - r * 0.4, ft.y - 34 * s - r * 0.35, r * 0.18, r * 0.28, -0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = ft.t < 1.3 ? 1 : Math.max(0, (1.7 - ft.t) / 0.4);
+      text('Cass Loves You', cx, ft.y - 72 * s - ft.t * 14 * s, 21 * s, '#ff8da0');
       ctx.globalAlpha = 1;
     }
   }
 
-  // ---------- Drawing ----------
+  // ---------- Coral / tower columns (levels 1, 2, 4, 5) ----------
+  function spawnCoral(x) {
+    const s = S();
+    const gap = coralGap() * s;
+    // level 5's gaps drift vertically, so leave headroom for the motion
+    const margin = (70 + (phase() === 5 ? 28 : 0)) * s;
+    const groundY = H - GROUND_H * s;
+    const gapY = margin + Math.random() * (groundY - margin * 2 - gap);
+    corals.push({ x, gapY, gap, gapY0: gapY, gap0: gap, seed: Math.random() * 7, scored: false });
+  }
+
+  // ---------- Steel blocks (level 3) ----------
+  function spawnSteel() {
+    const s = S();
+    const w = (48 + Math.random() * 28) * s;
+    const h = (60 + Math.random() * 42) * s;
+    const groundY = H - GROUND_H * s;
+    const y = 60 * s + Math.random() * (groundY - 130 * s - h);
+    steels.push({ x: W + 80 * s, y, w, h });
+  }
+
+  function spawnFart() {
+    const s = S();
+    for (let i = 0; i < 6; i++) {
+      farts.push({
+        x: cass.x - 24 * s + (Math.random() - 0.5) * 10 * s,
+        y: cass.y + 8 * s + (Math.random() - 0.5) * 12 * s,
+        vx: -(40 + Math.random() * 60) * s,
+        vy: (20 + Math.random() * 40) * s,
+        r: (5 + Math.random() * 6) * s,
+        life: 0.5 + Math.random() * 0.3
+      });
+    }
+  }
+
+  function sliceSteel(st, cutY) {
+    splitSteel(st, cutY);
+    onScore();
+  }
+  function splitSteel(st, cutY) {
+    const s = S();
+    cutY = Math.max(st.y + 8 * s, Math.min(cutY, st.y + st.h - 8 * s));
+    // two halves, separated exactly at the cut line, edges glowing molten
+    debris.push({
+      x: st.x, y: st.y, w: st.w, h: cutY - st.y,
+      vx: -coralSpeed() * s * 0.4, vy: -90 * s, rot: 0, vr: -1.2 - Math.random(),
+      glow: 1, cutSide: 'bottom'
+    });
+    debris.push({
+      x: st.x, y: cutY, w: st.w, h: st.y + st.h - cutY,
+      vx: -coralSpeed() * s * 0.2, vy: 60 * s, rot: 0, vr: 1 + Math.random(),
+      glow: 1, cutSide: 'top'
+    });
+    // molten sparks fly from the cut point
+    for (let i = 0; i < 12; i++) {
+      molten.push({
+        x: st.x + Math.random() * st.w, y: cutY,
+        vx: (Math.random() - 0.5) * 260 * s,
+        vy: -(40 + Math.random() * 160) * s,
+        life: 0.4 + Math.random() * 0.4
+      });
+    }
+    sndSizzle();
+  }
+
+  function circleRect(cx, cy, r, rx, ry, rw, rh) {
+    const nx = Math.max(rx, Math.min(cx, rx + rw));
+    const ny = Math.max(ry, Math.min(cy, ry + rh));
+    const dx = cx - nx, dy = cy - ny;
+    return dx * dx + dy * dy < r * r;
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    const s = S();
+    t += dt;
+
+    // ambient particles: bubbles/orbs rise, stars stream, petals/confetti fall
+    const ph = phase();
+    for (const b of drift) {
+      if (ph === 1) {
+        // clouds glide gently to the left
+        b.x -= b.v * dt;
+        if (b.x < -120 * b.s) { b.x = W + 120 * b.s; b.y = Math.random() * H * 0.55; }
+      } else if (ph === 4) {
+        b.y -= b.v * dt;
+        b.x += Math.sin(t * 2 + b.y * 0.02) * 12 * dt;
+        if (b.y < -20 * b.s) { b.y = H + 20 * b.s; b.x = Math.random() * W; }
+      } else if (ph === 2) {
+        if (state === ST.OUTRO) {
+          // warp: stars rush downward as the rocket climbs
+          b.y += (120 + outroT * 280) * dt;
+          if (b.y > H + 20) { b.y = -20; b.x = Math.random() * W; }
+        } else {
+          b.x -= b.v * dt;
+          if (b.x < -10) { b.x = W + 10; b.y = Math.random() * H; }
+        }
+      } else {
+        b.y += b.v * dt;
+        b.x += Math.sin(t * 1.5 + (b.sw || 0)) * 18 * dt;
+        if (b.y > H + 20) { b.y = -20; b.x = Math.random() * W; }
+      }
+    }
+
+    cass.tail += dt * 7;
+    cass.flame = Math.max(0, cass.flame - dt * 3);
+    cass.slice = Math.max(0, cass.slice - dt);
+    ssUnlockT = Math.max(0, ssUnlockT - dt);
+    if (ssGain) {
+      // guitar volume follows the remaining power: 3 points loud, 1 point faint
+      const target = ssActive > 0 ? ssActive / 3 : 0;
+      ssGain.gain.value += (target - ssGain.gain.value) * Math.min(1, dt * 2.5);
+    }
+    if (ssActive > 0 && Math.random() < dt * 25) {
+      // golden energy rising off the transformed cat
+      fireworks.push({
+        x: cass.x + (Math.random() - 0.5) * 34 * s, y: cass.y + 12 * s,
+        vx: (Math.random() - 0.5) * 30, vy: -(120 + Math.random() * 90),
+        life: 0.5, color: Math.random() < 0.5 ? '#ffe34d' : '#ffffff'
+      });
+    }
+
+    if (state === ST.READY) {
+      cass.y = H * 0.45 + Math.sin(t * 3) * 12 * s;
+      cass.fin = (Math.sin(t * 8) + 1) / 2;
+      return;
+    }
+
+    if (state === ST.SPLASH) {
+      splashT += dt;
+      cass.y = H * 0.45 + Math.sin(t * 3) * 12 * s;
+      updateSparkles(dt);
+      updateFireworks(dt);
+      updateEffects(dt);
+      return;
+    }
+
+    if (state === ST.WIN) {
+      winT += dt;
+      // the king stays on his throne, bobbing gently in the glory
+      cass.y = H - GROUND_H * s - 38 * s + Math.sin(t * 3) * 4 * s;
+      cass.rot = 0;
+      if (Math.random() < dt * 2) launchFireworks(false); // celebration barrage
+      updateSparkles(dt);
+      updateFireworks(dt);
+      updateEffects(dt);
+      return;
+    }
+
+    if (state === ST.OUTRO) {
+      outroT += dt;
+      const groundY = H - GROUND_H * s;
+      if (outroFrom === 1) {
+        // victory loop-the-loop with a bubble trail, then dart off ahead
+        if (outroT < 1.4) {
+          const a = (outroT / 1.4) * Math.PI * 2;
+          cass.x = outroStart.x + Math.sin(a) * 70 * s;
+          cass.y = outroStart.y - (1 - Math.cos(a)) * 70 * s;
+          cass.rot = -a;
+          if (Math.random() < dt * 25) {
+            sparkles.push({ x: cass.x - 14 * s, y: cass.y, vx: -40, vy: 30, life: 0.5 });
+          }
+        } else {
+          cass.rot *= 1 - dt * 8;
+          cass.x += 620 * s * dt;
+          cass.y += (H * 0.45 - cass.y) * dt * 2;
+        }
+      } else if (outroFrom === 2) {
+        // pitch the rocket up and blast off the top of the screen
+        cass.flame = 1;
+        if (outroT < 0.9) {
+          cass.rot += (-1.15 - cass.rot) * dt * 4;
+          cass.x += (W * 0.5 - cass.x) * dt * 2;
+        } else {
+          cass.y -= (200 + (outroT - 0.9) * 900) * s * dt;
+          if (Math.random() < dt * 40) {
+            burstParticles(cass.x - 8 * s, cass.y + 24 * s, ['#ff8c2e', '#ffe26b'], 2, 0.4);
+          }
+        }
+      } else if (outroFrom === 3) {
+        // the standoff: a giant monolith slides in... one perfect dash-slash
+        const blk = outroProp;
+        if (blk && !outroSlashed) {
+          blk.x += (W * 0.55 - blk.x) * dt * 2.5;
+          cass.x += (W * 0.16 - cass.x) * dt * 2;
+          cass.y += (blk.y + blk.h / 2 - cass.y) * dt * 2;
+          cass.rot *= 0.9;
+          if (outroT > 2.0) {
+            outroSlashed = true;
+            outroFlash = 1;
+            cass.slice = 0.25;
+            cass.x = blk.x + blk.w + 60 * s; // through it before the eye can follow
+            splitSteel(blk, blk.y + blk.h / 2);
+            outroProp = null;
+            sndSlice();
+            beep(98, 1.6, 'sine', 0.13); // gong
+          }
+        } else {
+          cass.rot *= 0.92;
+        }
+        outroFlash = Math.max(0, outroFlash - dt * 2);
+      } else if (outroFrom === 4) {
+        // encore at center stage: spin to the beat, explosions on every kick
+        cass.x += (W * 0.5 - cass.x) * dt * 2.5;
+        cass.y += (H * 0.42 + Math.sin(t * 3) * 10 * s - cass.y) * dt * 2.5;
+        const beat = Math.floor(outroT / 0.46);
+        if (beat > outroBeatN && outroT < 4.6) {
+          outroBeatN = beat;
+          sndKick();
+          if (beat % 2 === 0) sndRave();
+          burstParticles(Math.random() * W, Math.random() * H * 0.6,
+                         ['#00ffd0', '#ff00d0', '#ffe600', '#00a0ff'], 14, 1.1);
+          cass.spinV = 11;
+        }
+        cass.spinV = (cass.spinV || 0) * (1 - dt * 3);
+        if (cass.spinV > 0.3) cass.rot += cass.spinV * dt;
+        else cass.rot *= 1 - dt * 5;
+      } else {
+        // the coronation: a long, regal descent onto the golden throne
+        const k = Math.min(1, outroT / 3.4);
+        const e = 1 - Math.pow(1 - k, 3);
+        const tx = anemone.x, ty = groundY - 38 * s;
+        cass.x = outroStart.x + (tx - outroStart.x) * e;
+        cass.y = outroStart.y + (ty - outroStart.y) * e + Math.sin(outroT * 4) * (1 - k) * 10 * s;
+        cass.rot *= 1 - e;
+        if (!outroLanded && k >= 1) {
+          outroLanded = true;
+          burstParticles(tx, ty, ['#ffd94a', '#ff5c5c', '#ffffff', '#aef1b8'], 40, 1.4);
+        }
+        if (outroLanded && Math.random() < dt * 3) launchFireworks(false);
+      }
+      updateSparkles(dt);
+      updateFireworks(dt);
+      updateEffects(dt);
+      if (outroT > OUTRO_LENS[outroFrom]) {
+        if (outroFrom === 5) winGame();
+        else startSplash(outroFrom + 1);
+      }
+      return;
+    }
+
+    if (state === ST.DEAD) {
+      deathT += dt;
+      flashT = Math.max(0, flashT - dt * 3);
+      const groundY = H - GROUND_H * s;
+      if (cass.y < groundY - CASS_R * s) {
+        cass.vy += GRAVITY * s * dt;
+        cass.y += cass.vy * dt;
+        cass.rot = Math.min(cass.rot + dt * 6, Math.PI / 2);
+        if (cass.y > groundY - CASS_R * s) cass.y = groundY - CASS_R * s;
+      }
+      updateSparkles(dt);
+      updateFireworks(dt);
+      updateEffects(dt);
+      return;
+    }
+
+    // PLAYING
+    bgScroll += coralSpeed() * s * dt * 0.5; // background CASS drifts at half speed
+    cass.vy += GRAVITY * s * dt;
+    cass.y += cass.vy * dt;
+    cass.rot = Math.max(-0.45, Math.min(1.2, cass.vy / (600 * s)));
+    cass.fin = Math.max(0, cass.fin - dt * 4);
+
+    const r = CASS_R * s;
+    const groundY = H - GROUND_H * s;
+
+    if (ph !== 3) {
+      // column levels: dodge through the gaps
+      for (const p of corals) {
+        p.x -= coralSpeed() * s * dt;
+        if (ph === 4) {
+          // rave gates breathe to the beat
+          p.gap = p.gap0 * (1 + 0.12 * Math.sin(t * 4.4 + p.seed));
+          p.gapY = p.gapY0 + (p.gap0 - p.gap) / 2; // keep the gap centered as it breathes
+        } else if (ph === 5) {
+          // royal gates drift up and down
+          p.gapY = p.gapY0 + Math.sin(t * 1.6 + p.seed) * 26 * s;
+        }
+      }
+      if (corals.length === 0 || corals[corals.length - 1].x < W - CORAL_SPACING * s) {
+        spawnCoral(Math.max(W + 40, corals.length ? corals[corals.length - 1].x + CORAL_SPACING * s : W + 40));
+      }
+      while (corals.length && corals[0].x < -CORAL_W * s - 20) corals.shift();
+
+      for (const p of corals) {
+        const pw = CORAL_W * s;
+        if (!p.scored && p.x + pw < cass.x) {
+          p.scored = true;
+          onScore();
+          if (state !== ST.PLAYING) break; // a level splash paused the game
+        }
+        if (cass.x + r > p.x && cass.x - r < p.x + pw) {
+          if (cass.y - r < p.gapY || cass.y + r > p.gapY + p.gap) {
+            die();
+            break;
+          }
+        }
+      }
+    } else {
+      // samurai level: slice the steel before it hits you
+      for (const st of steels) st.x -= coralSpeed() * s * dt;
+      if (steels.length === 0 || steels[steels.length - 1].x < W - 300 * s) spawnSteel();
+      while (steels.length && steels[0].x + steels[0].w < -40) steels.shift();
+
+      // katana hitbox swings in front of the cat while slicing
+      if (cass.slice > 0) {
+        const hx = cass.x + 38 * s, hy = cass.y - 4 * s, hr = 46 * s;
+        for (let i = steels.length - 1; i >= 0; i--) {
+          const st = steels[i];
+          if (circleRect(hx, hy, hr, st.x, st.y, st.w, st.h)) {
+            steels.splice(i, 1);
+            sliceSteel(st, hy);
+          }
+        }
+      }
+
+      // unsliced steel is deadly — touching it OR letting it slip past you
+      if (state === ST.PLAYING) {
+        for (const st of steels) {
+          if (circleRect(cass.x, cass.y, r, st.x, st.y, st.w, st.h) ||
+              st.x + st.w < cass.x - r * 2) { die(); break; }
+        }
+      }
+    }
+
+    // ground & ceiling
+    if (state === ST.PLAYING) {
+      if (cass.y + r > groundY) { cass.y = groundY - r; die(); }
+      if (cass.y - r < 0) { cass.y = r; cass.vy = 50; }
+    }
+
+    updateSparkles(dt);
+    updateFireworks(dt);
+    updateEffects(dt);
+  }
+
+  function updateEffects(dt) {
+    const s = S();
+    for (const f of farts) {
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.r += 14 * s * dt;
+      f.life -= dt;
+    }
+    farts = farts.filter(f => f.life > 0);
+
+    for (const d of debris) {
+      d.x += d.vx * dt;
+      d.y += d.vy * dt;
+      d.vy += GRAVITY * 0.5 * s * dt;
+      d.rot += d.vr * dt;
+      d.glow = Math.max(0, d.glow - dt * 0.9);
+    }
+    debris = debris.filter(d => d.y < H + 200 && d.x > -300);
+
+    for (const m of molten) {
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
+      m.vy += GRAVITY * 0.6 * s * dt;
+      m.life -= dt;
+    }
+    molten = molten.filter(m => m.life > 0);
+  }
+
+  function die() {
+    if (ssActive > 0) return; // a super saiyan does not die
+    if (state === ST.DEAD) return;
+    state = ST.DEAD;
+    flashT = 1;
+    cass.vy = Math.min(cass.vy, 0);
+    sndHit();
+    setTimeout(sndMeow, 250);
+    if (!START) {
+      if (score > best) {
+        best = score;
+        localStorage.setItem('flappyKittyBest', best);
+      }
+      if (score > 0) {
+        addToLB(playerName, score);
+        pushRemoteScore(playerName, score);
+      }
+    }
+    logPlay(score);
+  }
+
+  function winGame() {
+    state = ST.WIN;
+    winT = 0;
+    sndChest();
+    setTimeout(snd1Up, 900);
+    if (!START) {
+      if (score > best) {
+        best = score;
+        localStorage.setItem('flappyKittyBest', best);
+      }
+      addToLB(playerName, score);
+      pushRemoteScore(playerName, score);
+    }
+    logPlay(score);
+  }
+
+  function burstSparkles() {
+    for (let i = 0; i < 8; i++) {
+      const a = Math.random() * Math.PI * 2;
+      sparkles.push({
+        x: cass.x, y: cass.y,
+        vx: Math.cos(a) * (60 + Math.random() * 120),
+        vy: Math.sin(a) * (60 + Math.random() * 120) - 60,
+        life: 0.6 + Math.random() * 0.3
+      });
+    }
+  }
+  function updateSparkles(dt) {
+    for (const sp of sparkles) {
+      sp.x += sp.vx * dt;
+      sp.y += sp.vy * dt;
+      sp.vy -= 250 * dt;
+      sp.life -= dt;
+    }
+    sparkles = sparkles.filter(sp => sp.life > 0);
+  }
+
+  // ---------- Drawing: backgrounds ----------
   function drawBackground() {
     const s = S();
-    const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#6ad7f0');
-    sky.addColorStop(0.7, '#b8ecf5');
-    sky.addColorStop(1, '#d9f6e8');
-    ctx.fillStyle = sky;
+    const ph = phase();
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    if (ph === 1) {
+      g.addColorStop(0, '#6ad7f0');
+      g.addColorStop(0.7, '#b8ecf5');
+      g.addColorStop(1, '#d9f6e8');
+    } else if (ph === 2) {
+      g.addColorStop(0, '#04040f');
+      g.addColorStop(0.6, '#0b0b28');
+      g.addColorStop(1, '#181339');
+    } else if (ph === 4) {
+      g.addColorStop(0, '#0b001a');
+      g.addColorStop(0.6, '#1a0033');
+      g.addColorStop(1, '#2d0a4e');
+    } else if (ph === 5) {
+      g.addColorStop(0, '#2a0a3a');
+      g.addColorStop(0.55, '#7a1f4f');
+      g.addColorStop(1, '#b8722a');
+    } else {
+      g.addColorStop(0, '#f5b16b');
+      g.addColorStop(0.55, '#e0455c');
+      g.addColorStop(1, '#5d2a4a');
+    }
+    ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
 
-    // sun
-    ctx.fillStyle = 'rgba(255, 240, 160, 0.9)';
-    ctx.beginPath();
-    ctx.arc(W * 0.82, H * 0.13, 36 * s, 0, Math.PI * 2);
-    ctx.fill();
+    // huge CASS branding scrolling behind the action
+    const fs = H * 0.3;
+    ctx.font = `900 ${fs}px -apple-system, "Segoe UI", Arial, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = ph === 2 ? 'rgba(255,217,74,0.08)'
+                  : ph === 4 ? `hsla(${(t * 50) % 360}, 90%, 60%, 0.1)`
+                  : ph === 5 ? 'rgba(255,217,74,0.12)'
+                  : 'rgba(255,255,255,0.09)';
+    const tw = ctx.measureText('CASS').width + W * 0.45;
+    for (let x = -(bgScroll % tw); x < W; x += tw) {
+      ctx.fillText('CASS', x, H * 0.38);
+    }
 
-    // clouds
-    for (const c of clouds) drawCloud(c.x, c.y, c.s);
+    if (ph === 1) {
+      // warm sun in the corner of the sky
+      ctx.fillStyle = 'rgba(255, 240, 160, 0.9)';
+      ctx.beginPath();
+      ctx.arc(W * 0.82, H * 0.13, 36 * s, 0, Math.PI * 2);
+      ctx.fill();
+      for (const b of drift) drawCloud(b.x, b.y, b.s);
+    } else if (ph === 2) {
+      // stars (stretched into warp streaks during the blast-off)
+      for (const b of drift) {
+        ctx.globalAlpha = 0.45 + 0.55 * (Math.sin(t * 3 + (b.tw || 0)) + 1) / 2;
+        if (state === ST.OUTRO) {
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 1.5 * b.s;
+          ctx.beginPath();
+          ctx.moveTo(b.x, b.y);
+          ctx.lineTo(b.x, b.y + (8 + outroT * 50) * b.s);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, 1.6 * b.s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+      // ringed planet
+      const px = W * 0.8, py = H * 0.16;
+      ctx.fillStyle = '#b06ad6';
+      ctx.beginPath(); ctx.arc(px, py, 30 * s, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#8a4cb0';
+      ctx.beginPath(); ctx.arc(px - 8 * s, py - 6 * s, 8 * s, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#ffd94a';
+      ctx.lineWidth = 3 * s;
+      ctx.beginPath(); ctx.ellipse(px, py, 48 * s, 12 * s, -0.3, 0, Math.PI * 2); ctx.stroke();
+    } else if (ph === 4) {
+      // beat strobe washing over the whole club (doubled for the encore)
+      const enc = state === ST.OUTRO;
+      const pulse = Math.max(0, Math.sin(t * 8.8));
+      ctx.fillStyle = `hsla(${(t * 60) % 360}, 90%, 60%, ${(0.04 + pulse * pulse * 0.06) * (enc ? 2 : 1)})`;
+      ctx.fillRect(0, 0, W, H);
+      // laser beams — sweeping, or converging on the star of the show
+      for (let i = 0; i < 4; i++) {
+        const ox = W * (0.2 + i * 0.2);
+        const a = enc ? Math.atan2(cass.y + 10, cass.x - ox)
+                      : Math.PI / 2 + Math.sin(t * (0.7 + i * 0.17) + i * 2) * 0.9;
+        ctx.strokeStyle = `hsla(${(t * 80 + i * 90) % 360}, 100%, 60%, ${enc ? 0.45 : 0.25})`;
+        ctx.lineWidth = 4 * s;
+        ctx.beginPath();
+        ctx.moveTo(ox, -10);
+        ctx.lineTo(ox + Math.cos(a) * H * 1.3, -10 + Math.sin(a) * H * 1.3);
+        ctx.stroke();
+      }
+      // disco ball (drops toward the dance floor for the finale)
+      const dx = W / 2, dy = H * 0.09 + (enc ? Math.min(1, outroT / 2) * H * 0.13 : 0), dr = 26 * s;
+      ctx.fillStyle = '#c9d4e0';
+      ctx.beginPath(); ctx.arc(dx, dy, dr, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(40,50,70,0.5)';
+      ctx.lineWidth = 1;
+      for (let i = -2; i <= 2; i++) {
+        ctx.beginPath(); ctx.ellipse(dx, dy, dr * Math.cos(i * 0.5), dr, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      // glints flying off the ball
+      for (let i = 0; i < 6; i++) {
+        const ga = t * 2 + i;
+        ctx.fillStyle = `hsla(${(t * 100 + i * 60) % 360}, 100%, 75%, 0.9)`;
+        ctx.beginPath();
+        ctx.arc(dx + Math.cos(ga) * dr * 0.8, dy + Math.sin(ga * 1.3) * dr * 0.8, 2.2 * s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // glow orbs floating up
+      for (const b of drift) {
+        ctx.fillStyle = `hsla(${(b.hue + t * 40) % 360}, 95%, 62%, 0.5)`;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 5 * b.s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (ph === 5) {
+      // golden sunburst radiating from the heavens
+      ctx.save();
+      ctx.translate(W / 2, -H * 0.05);
+      ctx.rotate(t * 0.1);
+      ctx.fillStyle = 'rgba(255, 217, 74, 0.07)';
+      for (let i = 0; i < 12; i++) {
+        ctx.rotate(Math.PI / 6);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-H * 0.12, H * 1.6);
+        ctx.lineTo(H * 0.12, H * 1.6);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+      // royal confetti
+      for (const b of drift) {
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.rotate(t * 3 + (b.sw || 0));
+        ctx.fillStyle = `hsla(${b.hue}, 90%, 65%, 0.9)`;
+        ctx.fillRect(-4 * b.s, -2 * b.s, 8 * b.s, 4 * b.s);
+        ctx.restore();
+      }
+    } else {
+      // big red sun
+      ctx.fillStyle = 'rgba(255, 70, 70, 0.85)';
+      ctx.beginPath();
+      ctx.arc(W * 0.78, H * 0.2, 52 * s, 0, Math.PI * 2);
+      ctx.fill();
+      // drifting cherry-blossom petals
+      for (const b of drift) {
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.rotate(t * 2 + (b.sw || 0));
+        ctx.fillStyle = 'rgba(255, 183, 211, 0.85)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 5 * b.s, 3 * b.s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
 
-    // distant hills
-    ctx.fillStyle = '#a5e3b2';
+    // distant ridge silhouette (hills / moon hills / mountains / skyline / palace)
+    ctx.fillStyle = ph === 1 ? 'rgba(122, 194, 122, 0.7)'
+                  : ph === 2 ? 'rgba(40, 40, 70, 0.8)'
+                  : ph === 4 ? 'rgba(20, 5, 45, 0.85)'
+                  : ph === 5 ? 'rgba(90, 50, 10, 0.6)'
+                  : 'rgba(50, 20, 55, 0.75)';
     ctx.beginPath();
     ctx.moveTo(0, H - GROUND_H * s);
     for (let x = 0; x <= W; x += 8) {
@@ -426,13 +1453,26 @@
   function drawGround() {
     const s = S();
     const gy = H - GROUND_H * s;
-    ctx.fillStyle = '#8bd06b';
+    const ph = phase();
+    const base = ph === 1 ? '#8bd06b' : ph === 2 ? '#8d8d99' : ph === 4 ? '#14141f' : ph === 5 ? '#8a1422' : '#8a5a33';
+    const edge = ph === 1 ? '#79c25a' : ph === 2 ? '#a3a3af' : ph === 4 ? '#262640' : ph === 5 ? '#d4a532' : '#a06a3e';
+    ctx.fillStyle = base;
     ctx.fillRect(0, gy, W, GROUND_H * s);
-    ctx.fillStyle = '#79c25a';
+    ctx.fillStyle = edge;
     ctx.fillRect(0, gy, W, 12 * s);
-    // scrolling stripes
-    const off = (state !== ST.DEAD ? (t * PIPE_SPEED * s) % (40 * s) : 0);
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    if (ph === 4) {
+      // light-up dance floor tiles
+      const tile = 52 * s;
+      const off4 = (state === ST.PLAYING ? (t * CORAL_SPEED * s) % (tile * 2) : 0);
+      for (let x = -off4; x < W; x += tile) {
+        ctx.fillStyle = `hsla(${(x * 0.6 + t * 120) % 360}, 90%, 55%, ${0.25 + 0.2 * Math.max(0, Math.sin(t * 8.8 + x * 0.05))})`;
+        ctx.fillRect(x + 2 * s, gy + 14 * s, tile - 4 * s, GROUND_H * s - 16 * s);
+      }
+      return;
+    }
+    // scrolling texture stripes
+    const off = (state === ST.PLAYING ? (t * CORAL_SPEED * s) % (40 * s) : 0);
+    ctx.fillStyle = ph === 2 ? 'rgba(0,0,0,0.15)' : ph === 5 ? 'rgba(255,217,74,0.15)' : 'rgba(255,255,255,0.18)';
     for (let x = -off; x < W; x += 40 * s) {
       ctx.beginPath();
       ctx.moveTo(x, gy + 12 * s);
@@ -442,43 +1482,141 @@
       ctx.closePath();
       ctx.fill();
     }
+    if (ph === 1) {
+      // tall grass tufts swaying in the breeze
+      ctx.strokeStyle = '#4a9e3c';
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 5; i++) {
+        const sx = ((i * 0.23 + 0.08) * W + (state === ST.PLAYING ? -(t * CORAL_SPEED * s * 0.25) : 0)) % (W + 40 * s);
+        const wx = sx < 0 ? sx + W + 40 * s : sx;
+        const sway = Math.sin(t * 2 + i * 1.7) * 6 * s;
+        ctx.lineWidth = 4 * s;
+        ctx.beginPath();
+        ctx.moveTo(wx, gy + 10 * s);
+        ctx.quadraticCurveTo(wx + sway, gy - 14 * s, wx + sway * 1.6, gy - 26 * s);
+        ctx.stroke();
+      }
+    }
   }
 
-  function drawPipe(p) {
+  // ---------- Drawing: obstacles ----------
+  function drawCoral(p) {
     const s = S();
-    const pw = PIPE_W * s;
+    const pw = CORAL_W * s;
     const gy = H - GROUND_H * s;
     const lip = 14 * s;
+    const ph = phase();
+    const space = ph === 2;
 
-    // styled as yarn-spool towers
     const body = ctx.createLinearGradient(p.x, 0, p.x + pw, 0);
-    body.addColorStop(0, '#e8743c');
-    body.addColorStop(0.5, '#ff9a5c');
-    body.addColorStop(1, '#d6602e');
+    if (space) {
+      body.addColorStop(0, '#6a7686');
+      body.addColorStop(0.5, '#b9c4d2');
+      body.addColorStop(1, '#5d6878');
+    } else if (ph === 4) {
+      // neon equalizer gates, color cycling with the music
+      const hue = (t * 60 + p.seed * 50) % 360;
+      body.addColorStop(0, `hsl(${hue}, 95%, 35%)`);
+      body.addColorStop(0.5, `hsl(${hue}, 100%, 65%)`);
+      body.addColorStop(1, `hsl(${hue}, 95%, 30%)`);
+    } else if (ph === 5) {
+      body.addColorStop(0, '#9a6a08');
+      body.addColorStop(0.5, '#ffd94a');
+      body.addColorStop(1, '#8a5a06');
+    } else if (ph === 1) {
+      // yarn-spool towers from Cass's backyard
+      body.addColorStop(0, '#e8743c');
+      body.addColorStop(0.5, '#ff9a5c');
+      body.addColorStop(1, '#d6602e');
+    } else {
+      body.addColorStop(0, '#d8527c');
+      body.addColorStop(0.5, '#ff7fa5');
+      body.addColorStop(1, '#c2406a');
+    }
 
-    // top tower
     ctx.fillStyle = body;
     ctx.fillRect(p.x, 0, pw, p.gapY - lip);
     roundRect(p.x - 5 * s, p.gapY - lip, pw + 10 * s, lip, 5 * s);
-    // bottom tower
     ctx.fillRect(p.x, p.gapY + p.gap + lip, pw, gy - (p.gapY + p.gap + lip));
     roundRect(p.x - 5 * s, p.gapY + p.gap, pw + 10 * s, lip, 5 * s);
 
-    // yarn winding lines
-    ctx.strokeStyle = 'rgba(120, 40, 10, 0.25)';
+    // ridges (yarn winding), seams + rivets (metal), glow bars (rave), jewels (royal)
+    ctx.strokeStyle = space ? 'rgba(20, 25, 40, 0.3)'
+                    : ph === 4 ? 'rgba(255, 255, 255, 0.35)'
+                    : ph === 5 ? 'rgba(120, 80, 0, 0.4)'
+                    : ph === 1 ? 'rgba(120, 40, 10, 0.25)'
+                    : 'rgba(110, 20, 50, 0.25)';
     ctx.lineWidth = 2 * s;
-    for (let y = 10 * s; y < p.gapY - lip; y += 14 * s) {
+    let jewel = 0;
+    const ridge = y => {
       ctx.beginPath();
       ctx.moveTo(p.x + 3 * s, y);
-      ctx.quadraticCurveTo(p.x + pw / 2, y + 6 * s, p.x + pw - 3 * s, y);
+      if (space || ph === 4) ctx.lineTo(p.x + pw - 3 * s, y);
+      else ctx.quadraticCurveTo(p.x + pw / 2, y + 6 * s, p.x + pw - 3 * s, y);
       ctx.stroke();
+      if (space) {
+        ctx.fillStyle = 'rgba(20, 25, 40, 0.4)';
+        ctx.beginPath(); ctx.arc(p.x + 8 * s, y, 2 * s, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x + pw - 8 * s, y, 2 * s, 0, Math.PI * 2); ctx.fill();
+      } else if (ph === 5 && jewel++ % 2 === 0) {
+        ctx.fillStyle = '#e0455c';
+        ctx.beginPath(); ctx.arc(p.x + pw / 2, y, 3 * s, 0, Math.PI * 2); ctx.fill();
+      }
+    };
+    for (let y = 10 * s; y < p.gapY - lip; y += 16 * s) ridge(y);
+    for (let y = p.gapY + p.gap + lip + 10 * s; y < gy; y += 16 * s) ridge(y);
+  }
+
+  function drawSteelBlock(x, y, w, h, glow, cutSide) {
+    const s = S();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, '#aeb9c6');
+    g.addColorStop(0.45, '#7e8a99');
+    g.addColorStop(0.55, '#cfd8e2');
+    g.addColorStop(1, '#5d6878');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(25, 32, 45, 0.6)';
+    ctx.lineWidth = 2 * s;
+    ctx.strokeRect(x, y, w, h);
+    // rivets
+    ctx.fillStyle = 'rgba(25, 32, 45, 0.5)';
+    for (const [rx, ry] of [[6, 6], [w - 6, 6], [6, h - 6], [w - 6, h - 6]]) {
+      ctx.beginPath(); ctx.arc(x + rx * s / S(), y + ry * s / S(), 2.2 * s, 0, Math.PI * 2); ctx.fill();
     }
-    for (let y = p.gapY + p.gap + lip + 10 * s; y < gy; y += 14 * s) {
+    // molten edge where the katana cut it
+    if (glow > 0 && cutSide) {
+      const ey = cutSide === 'top' ? y : y + h;
+      ctx.strokeStyle = `rgba(255, 120, 30, ${glow})`;
+      ctx.lineWidth = 4 * s;
+      ctx.beginPath(); ctx.moveTo(x, ey); ctx.lineTo(x + w, ey); ctx.stroke();
+      ctx.strokeStyle = `rgba(255, 230, 120, ${glow * 0.9})`;
+      ctx.lineWidth = 1.8 * s;
+      ctx.beginPath(); ctx.moveTo(x, ey); ctx.lineTo(x + w, ey); ctx.stroke();
+    }
+  }
+
+  function drawSteels() {
+    for (const st of steels) drawSteelBlock(st.x, st.y, st.w, st.h, 0, null);
+    if (outroProp && state === ST.OUTRO) {
+      drawSteelBlock(outroProp.x, outroProp.y, outroProp.w, outroProp.h, 0, null);
+    }
+    for (const d of debris) {
+      ctx.save();
+      ctx.translate(d.x + d.w / 2, d.y + d.h / 2);
+      ctx.rotate(d.rot);
+      drawSteelBlock(-d.w / 2, -d.h / 2, d.w, d.h, d.glow, d.cutSide);
+      ctx.restore();
+    }
+    // molten sparks
+    for (const m of molten) {
+      ctx.globalAlpha = Math.min(1, m.life * 2.5);
+      ctx.fillStyle = Math.random() < 0.5 ? '#ff8c2e' : '#ffe26b';
       ctx.beginPath();
-      ctx.moveTo(p.x + 3 * s, y);
-      ctx.quadraticCurveTo(p.x + pw / 2, y + 6 * s, p.x + pw - 3 * s, y);
-      ctx.stroke();
+      ctx.arc(m.x, m.y, 2.5 * S(), 0, Math.PI * 2);
+      ctx.fill();
     }
+    ctx.globalAlpha = 1;
   }
 
   function roundRect(x, y, w, h, r) {
@@ -492,14 +1630,216 @@
     ctx.fill();
   }
 
-  function drawKitty() {
+  // ---------- Drawing: Cass the cat (and his vehicles/weapons) ----------
+  function drawCass() {
+    const k = cass;
     const s = S();
-    const k = kitty;
+    const ph = phase();
+
+    // fart clouds render behind everything else
+    for (const f of farts) {
+      ctx.globalAlpha = Math.min(1, f.life * 2) * 0.6;
+      ctx.fillStyle = '#b9d96a';
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
     ctx.save();
     ctx.translate(k.x, k.y);
     ctx.rotate(k.rot);
     ctx.scale(s, s);
 
+    // super saiyan aura: a tall blazing flame with a green-gold edge
+    if (ssActive > 0) {
+      const flick = 1 + Math.sin(t * 22) * 0.15 + Math.random() * 0.08;
+      const ag = ctx.createRadialGradient(0, -6, 8, 0, -6, 80 * flick);
+      ag.addColorStop(0, 'rgba(255, 240, 130, 0.85)');
+      ag.addColorStop(0.55, 'rgba(255, 220, 60, 0.45)');
+      ag.addColorStop(1, 'rgba(180, 255, 60, 0)');
+      ctx.fillStyle = ag;
+      ctx.beginPath();
+      ctx.ellipse(0, -10, 64 * flick, 86 * flick, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (ph === 2) drawRocket(k);
+    const rideOffset = ph === 2 ? -10 : 0;
+    ctx.translate(0, rideOffset);
+
+    if (ph === 5) drawCape(k);
+    if (ssActive > 0) drawSSMane();
+    drawCatBody(k);
+    if (ssActive > 0) {
+      drawSSHair();
+    } else if (ph === 3) {
+      drawHeadband();
+    } else if (ph === 5) {
+      // royal crown perched between the ears
+      ctx.save();
+      ctx.translate(-2, -11);
+      drawCrown();
+      ctx.restore();
+    }
+    if (ph === 4 && state !== ST.DEAD) drawShades();
+    if (ph === 3) drawKatana(k);
+
+    ctx.restore();
+  }
+
+  function drawSSMane() {
+    // the full super saiyan 3 mane: towering spikes and a long flowing
+    // tail of bleached-gold hair that dwarfs the cat entirely
+    ctx.save();
+    ctx.scale(1.35, 1.35);
+    const w1 = Math.sin(t * 9) * 4, w2 = Math.sin(t * 9 + 2) * 4;
+    const jit = Math.sin(t * 30) * 1.8;
+    ctx.fillStyle = '#ffe34d';
+    ctx.strokeStyle = '#d4a532';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(16, -12);
+    // towering crown spikes
+    ctx.lineTo(24, -36 - jit);
+    ctx.lineTo(14, -22);
+    ctx.lineTo(13, -48 + jit);
+    ctx.lineTo(6, -24);
+    ctx.lineTo(2, -56 - jit);
+    ctx.lineTo(-3, -24);
+    ctx.lineTo(-12, -46 + jit);
+    ctx.lineTo(-9, -20);
+    // long flowing back mane
+    ctx.lineTo(-26, -34 + w1);
+    ctx.lineTo(-17, -14);
+    ctx.lineTo(-40, -22 + w2);
+    ctx.lineTo(-21, -6);
+    ctx.lineTo(-48, -6 + w1);
+    ctx.lineTo(-23, 2);
+    ctx.lineTo(-42, 12 + w2);
+    ctx.lineTo(-17, 9);
+    ctx.lineTo(0, 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // brighter bleached inner layer
+    ctx.fillStyle = '#fff3a0';
+    ctx.beginPath();
+    ctx.moveTo(12, -13);
+    ctx.lineTo(11, -36 + jit);
+    ctx.lineTo(5, -19);
+    ctx.lineTo(0, -42 - jit);
+    ctx.lineTo(-5, -19);
+    ctx.lineTo(-16, -30 + w1);
+    ctx.lineTo(-11, -10);
+    ctx.lineTo(-30, -12 + w2);
+    ctx.lineTo(-13, -2);
+    ctx.closePath();
+    ctx.fill();
+    // crackles of lightning around the power
+    if (Math.random() < 0.4) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 1.5;
+      for (let b = 0; b < 2; b++) {
+        const a = Math.random() * Math.PI * 2;
+        let x = Math.cos(a) * 22, y = Math.sin(a) * 18 - 8;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (let seg = 0; seg < 3; seg++) {
+          x += (Math.random() - 0.5) * 14 + Math.cos(a) * 9;
+          y += (Math.random() - 0.5) * 14 + Math.sin(a) * 9;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawSSHair() {
+    // front bangs of the mane, flickering with power
+    const jit = Math.sin(t * 30) * 1.2;
+    ctx.fillStyle = '#ffe34d';
+    ctx.strokeStyle = '#d4a532';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(1, -12);
+    ctx.lineTo(-3, -22 - jit);
+    ctx.lineTo(4, -16);
+    ctx.lineTo(3, -29 + jit);
+    ctx.lineTo(8, -17);
+    ctx.lineTo(10, -33 - jit);
+    ctx.lineTo(13, -17);
+    ctx.lineTo(17, -30 + jit);
+    ctx.lineTo(18, -16);
+    ctx.lineTo(24, -23 - jit);
+    ctx.lineTo(22, -12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  function drawCape(k) {
+    // flowing royal cape with gold trim
+    const fl = Math.sin(k.tail * 1.3) * 4;
+    ctx.fillStyle = '#c1272d';
+    ctx.beginPath();
+    ctx.moveTo(-2, -8);
+    ctx.quadraticCurveTo(-22, -4 + fl, -32, 10 + fl);
+    ctx.quadraticCurveTo(-16, 9, -4, 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#ffd94a';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  function drawRocket(k) {
+    // flames blast out the back on every tap
+    if (k.flame > 0) {
+      const len = (16 + k.flame * 26) * (0.85 + Math.random() * 0.3);
+      ctx.fillStyle = '#ff8c2e';
+      ctx.beginPath();
+      ctx.moveTo(-26, 12);
+      ctx.lineTo(-26 - len, 19 + Math.random() * 4 - 2);
+      ctx.lineTo(-26, 26);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffe26b';
+      ctx.beginPath();
+      ctx.moveTo(-26, 15);
+      ctx.lineTo(-26 - len * 0.55, 19 + Math.random() * 3 - 1.5);
+      ctx.lineTo(-26, 23);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // body
+    ctx.fillStyle = '#e8e8ee';
+    ctx.strokeStyle = '#9aa0ad';
+    ctx.lineWidth = 1.5;
+    roundRect(-26, 10, 46, 16, 7);
+    ctx.stroke();
+    // nose cone
+    ctx.fillStyle = '#e0455c';
+    ctx.beginPath();
+    ctx.moveTo(20, 10); ctx.lineTo(34, 18); ctx.lineTo(20, 26);
+    ctx.closePath(); ctx.fill();
+    // tail fins
+    ctx.beginPath();
+    ctx.moveTo(-26, 12); ctx.lineTo(-34, 4); ctx.lineTo(-22, 10);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-26, 24); ctx.lineTo(-34, 32); ctx.lineTo(-22, 26);
+    ctx.closePath(); ctx.fill();
+    // porthole
+    ctx.fillStyle = '#39a9d8';
+    ctx.strokeStyle = '#9aa0ad';
+    ctx.beginPath();
+    ctx.arc(-2, 18, 4.5, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+  }
+
+  function drawCatBody(k) {
     // Cass: gray-brown tabby, white bib + socks, green eyes
     const fur = '#a08c74';
     const furDark = '#5f4f3c';
@@ -524,8 +1864,8 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // wing (white, flaps)
-    const wingUp = -10 - kitty.wing * 16;
+    // wing (white, flaps on tap)
+    const wingUp = -10 - k.fin * 16;
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
     ctx.beginPath();
     ctx.moveTo(-4, -2);
@@ -558,6 +1898,27 @@
     ctx.beginPath();
     ctx.ellipse(6, 15, 4.5, 3, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // saiyan battle gi: orange suit with a blue sash while transformed
+    if (ssActive > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(-4, 4, 16, 13, 0, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.fillStyle = '#e8731d';
+      ctx.fillRect(-21, -10, 28, 28);
+      ctx.fillStyle = '#2a4fa8';
+      ctx.fillRect(0, -10, 5, 28);
+      ctx.restore();
+      // sash knot and dangling tails
+      ctx.strokeStyle = '#2a4fa8';
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(2.5, 14); ctx.lineTo(-1, 20); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(2.5, 14); ctx.lineTo(5.5, 20); ctx.stroke();
+      ctx.fillStyle = '#2a4fa8';
+      ctx.beginPath(); ctx.arc(2.5, 14, 2.4, 0, Math.PI * 2); ctx.fill();
+    }
 
     // head
     ctx.fillStyle = fur;
@@ -605,7 +1966,7 @@
       ctx.beginPath(); ctx.moveTo(6, -10); ctx.lineTo(11, -5); ctx.moveTo(11, -10); ctx.lineTo(6, -5); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(15, -10); ctx.lineTo(20, -5); ctx.moveTo(20, -10); ctx.lineTo(15, -5); ctx.stroke();
     } else {
-      // big green eyes like Cass
+      // big green eyes like the real Cass
       ctx.fillStyle = '#9db657';
       ctx.beginPath(); ctx.arc(8.5, -7.5, 3, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(17.5, -7.5, 3, 0, Math.PI * 2); ctx.fill();
@@ -639,35 +2000,180 @@
     ctx.moveTo(22, -2); ctx.lineTo(29, -3);
     ctx.moveTo(22, 0); ctx.lineTo(29, 1);
     ctx.stroke();
-
-    ctx.restore();
   }
 
-  function drawStars() {
-    for (const st of stars) {
-      ctx.save();
-      ctx.translate(st.x, st.y);
-      ctx.globalAlpha = Math.min(1, st.life * 2);
-      const r = 5 * S();
-      if (st.heart) {
-        drawHeart(0, 0, r * 0.9, st.color);
-      } else {
-        ctx.rotate(st.life * 8);
-        ctx.fillStyle = st.color || '#ffd94a';
+  function drawCrown() {
+    // black & gold royal crown
+    ctx.fillStyle = '#1c1c1e';
+    ctx.strokeStyle = '#d4a532';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(5, -13);
+    ctx.lineTo(6, -21);
+    ctx.lineTo(9.5, -16);
+    ctx.lineTo(12.5, -23);
+    ctx.lineTo(15.5, -16);
+    ctx.lineTo(19, -21);
+    ctx.lineTo(20, -13);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#d4a532';
+    ctx.fillRect(5, -14, 15, 1.8);
+    ctx.beginPath(); ctx.arc(6, -21, 1.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(12.5, -23, 1.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(19, -21, 1.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e0455c';
+    ctx.beginPath();
+    ctx.arc(12.5, -17, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawHeadband() {
+    // red samurai headband, knot trailing behind
+    ctx.fillStyle = '#c1272d';
+    ctx.fillRect(4, -13.5, 17, 4);
+    ctx.strokeStyle = '#8a1418';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(4, -13.5, 17, 4);
+    // rising sun dot
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(12.5, -11.5, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c1272d';
+    ctx.beginPath(); ctx.arc(12.5, -11.5, 1.1, 0, Math.PI * 2); ctx.fill();
+    // tails flapping
+    ctx.strokeStyle = '#c1272d';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    const fl = Math.sin(cass.tail * 1.5) * 3;
+    ctx.beginPath();
+    ctx.moveTo(4, -11);
+    ctx.quadraticCurveTo(-4, -13 + fl, -9, -10 + fl);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(4, -11);
+    ctx.quadraticCurveTo(-3, -9 + fl, -8, -5 + fl);
+    ctx.stroke();
+  }
+
+  function drawShades() {
+    // LED party shades over the eyes, cycling colors with the rave lights
+    const hue = (t * 120) % 360;
+    ctx.fillStyle = `hsl(${hue}, 100%, 55%)`;
+    ctx.strokeStyle = '#141414';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(8.5, -7.5, 4.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(17.5, -7.5, 4.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // bridge + arms hooked toward the ears
+    ctx.beginPath(); ctx.moveTo(12.4, -8.2); ctx.lineTo(13.6, -8.2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(4.2, -8.5); ctx.lineTo(1.2, -11); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(21.8, -8.5); ctx.lineTo(24.5, -11); ctx.stroke();
+    // shine
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(7, -9.5); ctx.lineTo(9.5, -6); ctx.stroke();
+  }
+
+  function drawKatana(k) {
+    // blade sweeps from raised to follow-through during a slice
+    const prog = k.slice > 0 ? 1 - k.slice / 0.25 : 0;
+    const angle = k.slice > 0 ? (-1.7 + prog * 2.4) : -0.9;
+    ctx.save();
+    ctx.translate(8, -1);
+    ctx.rotate(angle);
+    // handle
+    ctx.strokeStyle = '#5a2330';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 9); ctx.stroke();
+    // guard
+    ctx.fillStyle = '#d4a532';
+    ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+    // blade
+    ctx.strokeStyle = '#dfe7ef';
+    ctx.lineWidth = 3.4;
+    ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(0, -36); ctx.stroke();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(1, -2); ctx.lineTo(1, -35); ctx.stroke();
+    ctx.restore();
+    // slash trail
+    if (k.slice > 0) {
+      ctx.strokeStyle = `rgba(255,255,255,${k.slice / 0.25 * 0.8})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(8, -1, 38, -2.6 + prog * 2.4, -1.5 + prog * 2.4);
+      ctx.stroke();
+    }
+  }
+
+  function drawAnemone(front) {
+    // the golden throne only appears for the level-5 coronation (and stays for the win)
+    if (!((state === ST.OUTRO || state === ST.WIN) && outroFrom === 5)) return;
+    const s = S();
+    const gy = H - GROUND_H * s;
+    const ax = anemone.x;
+    const grow = Math.min(1, outroT / 0.8); // rises out of the red carpet
+    if (!front) {
+      // heavenly light beam once the king has landed
+      if (outroLanded) {
+        ctx.fillStyle = 'rgba(255, 217, 74, 0.16)';
         ctx.beginPath();
-        for (let i = 0; i < 5; i++) {
-          const a = (i * 4 * Math.PI) / 5 - Math.PI / 2;
-          ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-        }
+        ctx.moveTo(ax - 26 * s, 0);
+        ctx.lineTo(ax + 26 * s, 0);
+        ctx.lineTo(ax + 72 * s, gy);
+        ctx.lineTo(ax - 72 * s, gy);
         ctx.closePath();
         ctx.fill();
       }
+      ctx.fillStyle = '#9a6a08';
+      ctx.beginPath();
+      ctx.ellipse(ax, gy + 6 * s, 70 * s * grow, 30 * s * grow, 0, Math.PI, 0);
+      ctx.fill();
+    }
+    const n = 13;
+    for (let i = 0; i < n; i++) {
+      const isFront = i % 3 === 0;
+      if (front !== isFront) continue;
+      const fx = ax + (i - (n - 1) / 2) * 10 * s;
+      const len = (50 + (i % 4) * 12) * s * grow;
+      const sway = Math.sin(t * 2.4 + i * 1.3) * 9 * s;
+      ctx.strokeStyle = '#ffd94a';
+      ctx.lineWidth = 7 * s;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(fx, gy + 4 * s);
+      ctx.quadraticCurveTo(fx + sway * 0.5, gy - len * 0.6, fx + sway, gy - len);
+      ctx.stroke();
+      ctx.fillStyle = '#e0455c';
+      ctx.beginPath();
+      ctx.arc(fx + sway, gy - len, 4 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawSparkles() {
+    // little gold stars burst off Cass on every point
+    ctx.fillStyle = '#ffd94a';
+    for (const sp of sparkles) {
+      ctx.save();
+      ctx.translate(sp.x, sp.y);
+      ctx.rotate(sp.life * 8);
+      ctx.globalAlpha = Math.min(1, sp.life * 2);
+      const r = 5 * S();
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath();
+      ctx.fill();
       ctx.restore();
     }
     ctx.globalAlpha = 1;
   }
 
-  function text(str, x, y, size, fill = '#fff', stroke = '#4a3621', align = 'center') {
+  function text(str, x, y, size, fill = '#fff', stroke = '#123a5c', align = 'center') {
     ctx.font = `bold ${size}px -apple-system, "Segoe UI", Arial, sans-serif`;
     ctx.textAlign = align;
     ctx.textBaseline = 'middle';
@@ -679,38 +2185,110 @@
     ctx.fillText(str, x, y);
   }
 
-  function drawNameButton(cy) {
-    const s = S();
-    const size = 18 * s;
-    const label = `✏️ ${playerName || 'Set your name'}`;
-    ctx.font = `bold ${size}px -apple-system, "Segoe UI", Arial, sans-serif`;
-    const w = ctx.measureText(label).width + 30 * s;
-    const h = 36 * s;
-    const x = W / 2 - w / 2;
-    const y = cy - h / 2;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    roundRect(x, y, w, h, h / 2);
-    text(label, W / 2, cy, size);
-    nameBtn = { x, y, w, h };
-  }
-
   function drawUI() {
     const s = S();
-    const safeTop = 40 * s + (window.visualViewport ? 0 : 0);
-    nameBtn = null;
+    const safeTop = 40 * s;
 
     if (state === ST.PLAYING) {
+      // the whole screen radiates while he's transformed
+      if (ssActive > 0) {
+        ctx.fillStyle = `rgba(255, 225, 90, ${0.06 + Math.max(0, Math.sin(t * 11)) * 0.05})`;
+        ctx.fillRect(0, 0, W, H);
+      }
       text(score, W / 2, safeTop + 30 * s, 52 * s);
-      if (level() > 0) text(`Level ${level() + 1}`, W / 2, safeTop + 64 * s, 17 * s, '#ffe9c9');
+      text(`LVL ${phase()}`, W / 2, safeTop + 62 * s, 16 * s, '#cdeef5');
+
+      // unlock banner flashes with the how-to
+      if (ssUnlockT > 0 && Math.floor(ssUnlockT * 3) % 3 !== 0) {
+        text('⚡ SUPER SAIYAN UNLOCKED! ⚡', W / 2, H * 0.3, Math.min(26 * s, W * 0.055), '#ffe34d', '#7a4a00');
+        text('Tap the ⚡ button or 2-finger tap', W / 2, H * 0.36, 18 * s);
+        text('to transform!', W / 2, H * 0.41, 18 * s);
+      }
+
+      // super saiyan inventory button / active countdown
+      if (ssActive > 0) {
+        const b = ssButton();
+        const pulse = 1 + Math.sin(t * 14) * 0.1;
+        ctx.strokeStyle = '#ffe34d';
+        ctx.lineWidth = 5 * s * pulse;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.stroke();
+        text(ssActive, b.x, b.y - 2 * s, 28 * s, '#ffe34d', '#7a4a00');
+        text('points left', b.x, b.y + 17 * s, 10 * s, '#fff');
+      } else if (ssCharges > 0) {
+        const b = ssButton();
+        const pulse = 1 + Math.sin(t * 5) * 0.08;
+        ctx.fillStyle = 'rgba(13, 50, 90, 0.65)';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffe34d';
+        ctx.lineWidth = 3 * s;
+        ctx.stroke();
+        text('⚡', b.x, b.y - 6 * s, 24 * s);
+        text(`x${ssCharges}`, b.x, b.y + 15 * s, 13 * s, '#ffd94a');
+      }
     } else if (state === ST.READY) {
-      text("Cass' Tappy", W / 2, H * 0.17, 40 * s, '#ffd94a');
-      text('Adventure', W / 2, H * 0.24, 40 * s, '#ffd94a');
-      text('🐾', W / 2, H * 0.3, 26 * s);
-      text('Tap to flap!', W / 2, H * 0.6, 26 * s);
-      if (best > 0) text(`Best: ${best}`, W / 2, H * 0.66, 20 * s, '#ffe9c9');
-      drawNameButton(H * 0.76);
+      text("Cass' Tappy", W / 2, H * 0.19, 40 * s, '#ffd94a');
+      text('Adventure', W / 2, H * 0.26, 40 * s, '#ffd94a');
+      text('🐱', W / 2, H * 0.32, 26 * s);
+      text('Tap to flap!', W / 2, H * 0.62, 26 * s);
+      if (best > 0) text(`Best: ${best}`, W / 2, H * 0.68, 20 * s, '#cdeef5');
+      text(VERSION, W / 2, H * 0.95, 13 * s, 'rgba(255,255,255,0.55)', 'rgba(0,0,0,0.25)');
+    } else if (state === ST.OUTRO) {
+      const pop = Math.max(0.2, Math.min(1, outroT / 0.4));
+      text(`LEVEL ${outroFrom} CLEAR!`, W / 2, H * 0.16, 40 * s * pop, '#ffd94a');
+      const caption = { 1: 'Nice flying! 🐱', 2: 'TO THE STARS! 🚀', 3: 'FLAWLESS BLADE. ⚔️',
+                        4: 'ENCORE!! 🪩', 5: 'ALL HAIL KING CASS 👑' }[outroFrom];
+      if (outroT > 0.8) text(caption, W / 2, H * 0.24, 22 * s, '#fff');
+      if (outroFlash > 0) {
+        ctx.fillStyle = `rgba(255,255,255,${outroFlash * 0.85})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+    } else if (state === ST.SPLASH) {
+      ctx.fillStyle = 'rgba(0, 0, 20, 0.78)';
+      ctx.fillRect(0, 0, W, H);
+      const sp = { 2: SPLASH_2, 3: SPLASH_3, 4: SPLASH_4, 5: SPLASH_5 }[splashLevel];
+      const subCol = { 2: ['#b06ad6', '#1c1c1e'], 3: ['#c1272d', '#fff'],
+                       4: ['#00ffd0', '#0a0a1e'], 5: ['#ffd94a', '#7a1f1f'] }[splashLevel];
+      const u = Math.min(s, W / 430); // shrink text on narrow phones so lines fit
+      const rows = [[sp.title, 48, '#ffd94a', undefined]];
+      rows.push([sp.subtitle, 28, subCol[0], subCol[1]]);
+      if (sp.warning) rows.push([sp.warning, 20, '#ff8b6b', undefined]);
+      for (const ln of sp.lines) rows.push([ln, 19, '#fff', undefined]);
+      rows.push([sp.prompt, 22, '#ffd94a', undefined]);
+      // center the whole block vertically
+      const blockH = rows.reduce((a, r) => a + r[1] * 1.9 * u, 0);
+      let y = (H - blockH) / 2;
+      rows.forEach((r, i) => {
+        const rowH = r[1] * 1.9 * u;
+        const isPrompt = i === rows.length - 1;
+        const blinkOn = splashT > 0.8 && Math.floor(splashT * 2) % 2 === 0;
+        if (!isPrompt || blinkOn) text(r[0], W / 2, y + rowH / 2, r[1] * u, r[2], r[3]);
+        y += rowH;
+      });
+    } else if (state === ST.WIN) {
+      if (winT > 0.3) {
+        ctx.fillStyle = 'rgba(0, 0, 20, 0.45)';
+        ctx.fillRect(0, 0, W, H);
+        text('🏆 YOU WIN! 🏆', W / 2, H * 0.16, 40 * s, '#ffd94a');
+        text('CASS #1 CHAMPION', W / 2, H * 0.24, 24 * s, '#aef1b8');
+        text(`Score: ${score}`, W / 2, H * 0.32, 30 * s);
+        const lb = lbTop().slice(0, 5);
+        if (lb.length) {
+          text(remoteLB ? '🌍 Global Leaderboard' : '🏆 Leaderboard', W / 2, H * 0.43, 22 * s, '#ffd94a');
+          lb.forEach((e, i) => {
+            const mine = e.name === playerName;
+            text(`${i + 1}. ${e.name} — ${e.score}`, W / 2, H * (0.49 + i * 0.045),
+                 17 * s, mine ? '#ffd94a' : '#fff');
+          });
+        }
+        if (winT > 1 && Math.floor(winT * 2) % 2 === 0) {
+          text('Tap to play again', W / 2, H * 0.79, 22 * s);
+        }
+      }
     } else if (state === ST.DEAD) {
-      // flash on hit
       if (flashT > 0) {
         ctx.fillStyle = `rgba(255,255,255,${flashT * 0.6})`;
         ctx.fillRect(0, 0, W, H);
@@ -718,26 +2296,23 @@
       if (deathT > 0.4) {
         ctx.fillStyle = 'rgba(0,0,0,0.45)';
         ctx.fillRect(0, 0, W, H);
-        text('Game Over', W / 2, H * 0.17, 40 * s, '#ff8b6b');
-        text(`Score: ${score}`, W / 2, H * 0.25, 30 * s);
-        if (score >= best && score > 0) text('New record! 🎉', W / 2, H * 0.31, 20 * s, '#aef1b8');
+        text('Meow... Game Over', W / 2, H * 0.2, 36 * s, '#ff8b6b');
+        text(`Score: ${score}`, W / 2, H * 0.29, 30 * s);
+        text(`Best: ${best}`, W / 2, H * 0.35, 22 * s, '#ffd94a');
+        if (score >= best && score > 0 && !START) text('New record! 👑', W / 2, H * 0.405, 20 * s, '#aef1b8');
 
-        // leaderboard (top 5 on this device)
-        text('🏆 Leaderboard', W / 2, H * 0.4, 24 * s, '#ffd94a');
-        const top = leaderboard.slice(0, 5);
-        if (top.length === 0) {
-          text('Score a point to get on the board!', W / 2, H * 0.47, 17 * s, '#ffe9c9');
-        }
-        for (let i = 0; i < top.length; i++) {
-          const e = top[i];
-          const mine = e.name === playerName;
-          text(`${i + 1}.  ${e.name} — ${e.score}`, W / 2, H * (0.46 + i * 0.05), 19 * s,
-               mine ? '#ffd94a' : '#fff');
+        const lb = lbTop().slice(0, 5);
+        if (lb.length) {
+          text(remoteLB ? '🌍 Global Leaderboard' : '🏆 Leaderboard', W / 2, H * 0.47, 22 * s, '#ffd94a');
+          lb.forEach((e, i) => {
+            const mine = e.name === playerName;
+            text(`${i + 1}. ${e.name} — ${e.score}`, W / 2, H * (0.53 + i * 0.045),
+                 17 * s, mine ? '#ffd94a' : '#fff');
+          });
         }
 
-        drawNameButton(H * 0.78);
         if (deathT > 0.6 && Math.floor(deathT * 2) % 2 === 0) {
-          text('Tap to try again', W / 2, H * 0.87, 22 * s);
+          text('Tap to try again', W / 2, H * 0.79, 22 * s);
         }
       }
     }
@@ -752,17 +2327,23 @@
     update(dt);
 
     drawBackground();
-    for (const p of pipes) drawPipe(p);
+    if (phase() === 3) drawSteels();
+    else for (const p of corals) drawCoral(p);
     drawGround();
-    drawStars();
-    drawKitty();
-    drawCelebs();
+    drawAnemone(false); // the golden throne rises behind Cass during outros
+    drawSparkles();
+    drawCass();
+    drawAnemone(true); // front fronds wrap around the landed king
+    drawFireworks();
     drawUI();
+
+    nameBtn.style.display = (state === ST.PLAYING || state === ST.SPLASH || state === ST.OUTRO) ? 'none' : 'block';
 
     requestAnimationFrame(frame);
   }
 
   reset();
+  refreshRemoteLB();
   requestAnimationFrame(frame);
 })();
 </script>
