@@ -149,8 +149,9 @@ async function load() {
     return;
   }
   const data = await res.json() || {};
+  // the database is shared with other games — this dashboard only shows Cass plays
   const plays = Object.values(data)
-    .filter(p => p && p.ts && p.name)
+    .filter(p => p && p.ts && p.name && p.game === 'cass')
     .sort((a, b) => b.ts - a.ts);
   render(plays);
 }

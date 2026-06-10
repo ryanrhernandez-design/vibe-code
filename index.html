@@ -242,9 +242,12 @@
   }
 
   // ---------- Cross-device leaderboard (Firebase Realtime DB over REST) ----------
-  // Set to a Firebase Realtime Database URL, e.g.
-  // 'https://royal-nemo-default-rtdb.firebaseio.com' — empty = this device only.
+  // Set to a Firebase Realtime Database URL — empty = this device only.
+  // The database is shared with other games, so every entry this game
+  // writes is tagged with GAME, and only GAME entries are read back:
+  // the Cass leaderboard stays completely separate.
   const REMOTE_DB = 'https://royal-nemo-default-rtdb.firebaseio.com';
+  const GAME = 'cass';
   let remoteLB = null; // latest fetched global top-10
 
   function lbTop() {
@@ -255,7 +258,7 @@
     try {
       const res = await fetch(REMOTE_DB + '/scores.json');
       const data = await res.json() || {};
-      const all = Object.values(data).filter(e => e && e.name && typeof e.score === 'number');
+      const all = Object.values(data).filter(e => e && e.game === GAME && e.name && typeof e.score === 'number');
       all.sort((a, b) => b.score - a.score);
       remoteLB = all.slice(0, 10);
     } catch (e) { /* offline: keep showing the last list we had */ }
@@ -264,7 +267,7 @@
     if (!REMOTE_DB) return;
     fetch(REMOTE_DB + '/scores.json', {
       method: 'POST',
-      body: JSON.stringify({ name, score: sc, ts: Date.now() })
+      body: JSON.stringify({ name, score: sc, ts: Date.now(), game: GAME })
     }).then(refreshRemoteLB).catch(() => {});
   }
   async function renameRemote(oldName, newName) {
@@ -274,7 +277,7 @@
       const data = await res.json() || {};
       const updates = {};
       for (const [k, e] of Object.entries(data)) {
-        if (e && e.name === oldName) updates[k + '/name'] = newName;
+        if (e && e.game === GAME && e.name === oldName) updates[k + '/name'] = newName;
       }
       if (Object.keys(updates).length) {
         await fetch(REMOTE_DB + '/scores.json', { method: 'PATCH', body: JSON.stringify(updates) });
@@ -557,7 +560,7 @@
     try {
       fetch(REMOTE_DB + '/plays.json', {
         method: 'POST',
-        body: JSON.stringify({ name: playerName, ts: Date.now(), v: VERSION, score: finalScore, lvl: phase() })
+        body: JSON.stringify({ name: playerName, ts: Date.now(), v: VERSION, score: finalScore, lvl: phase(), game: GAME })
       }).catch(() => {});
     } catch (e) { /* logging is best-effort */ }
   }
