@@ -1,34 +1,34 @@
 # Fruit Labeling Hero 🥑🍊🍎🍑
 
-An HTML5 arcade game about the noble art of fruit labeling. Fruit rolls down the
-conveyor line and passes under your labeling head — fire the **right PLU label**
-onto every piece before it ships.
+A top-down HTML5 arcade game about running a real fruit labeling line. Four
+conveyor lanes run up the screen, one commodity at a time. Tap a lane to send
+the labeler carriage sliding across the bridge — its fingers tap a PLU sticker
+onto each fruit as it crosses. Don't let unlabeled fruit ship.
 
-> Inspired by real produce labeling lines: avocados, citrus, apples, and stone
-> fruit, each with their real PLU codes.
+> Inspired by real produce labeling machinery: avocados, citrus, apples, and
+> stone fruit, each with their real PLU codes.
 
 ## How to play
 
-Open `index.html` in any modern browser (or serve it with
-`python3 -m http.server` and visit `http://localhost:8000`).
+Open `index.html` in any modern browser — designed for phones in portrait.
+(Desktop: serve with `python3 -m http.server`, keys `1–4` fire each lane,
+`P` pauses.)
 
-| Key | Label | Fruit |
-|-----|-------|-------|
-| `1` | PLU 4046 | Avocado |
-| `2` | PLU 4131 | Apple |
-| `3` | PLU 4012 | Orange |
-| `4` | PLU 4044 | Peach |
-
-- Tap the on-screen label buttons on mobile.
-- Fire when a fruit is inside the dashed target zone under the labeling head.
-- **Dead-center hits** earn an accuracy bonus; consecutive correct labels build a combo.
-- A **wrong label** or **unlabeled fruit leaving the line** costs a life. Three strikes and the shift is over.
-- The line speeds up every level, and new fruit varieties join the belt.
-- `P` stops/restarts the conveyor.
+- **Tap a lane** to send the labeler carriage there; it stamps on arrival.
+- Tag fruit while it's inside the dashed window around the bridge — dead-center
+  hits earn an accuracy bonus, and consecutive tags build a combo.
+- **One commodity at a time**: avocados (PLU 4046), apples (4131), oranges
+  (4012), peaches (4044), in randomized order.
+- Every **15 fruits** the belt speeds up slightly. Every **30 fruits** the belt
+  drains and the line changes over to the next commodity.
+- Lane spawn patterns randomize every run, with simultaneous doubles showing up
+  as the line gets faster.
+- A fruit that passes the labeler unstickered is a strike — three strikes and
+  the shift is over. High score persists as your plant record.
 
 ## Ideas for future shifts
 
-- Multiple lanes with one labeler per lane
 - Label cassette reloads (limited stickers, reload mid-rush)
-- Organic (9-prefix) PLUs that look almost identical — read carefully!
-- Cross-belt sorter mode
+- Culls on the belt that must NOT be labeled
+- Organic (9-prefix) PLU rounds
+- More lanes / dual labeler carriages

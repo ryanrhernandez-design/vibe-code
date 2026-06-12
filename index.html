@@ -8,92 +8,39 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Fruit Labeling Hero</title>
 <style>
-  :root {
-    --steel: #3b4252;
-    --steel-dark: #2b3140;
-    --accent: #ffd166;
-  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     height: 100%;
-    background: #1a1e28;
+    background: #14181f;
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
     color: #eee;
     overflow: hidden;
     touch-action: manipulation;
     -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
   #wrap {
     height: 100%;
     height: 100dvh;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 8px;
-    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    padding: 6px;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
   }
   #game {
     background: #222836;
-    border-radius: 10px;
-    box-shadow: 0 10px 40px rgba(0,0,0,.5);
-    width: 100%;
-    max-width: min(100%, calc((100dvh - 130px) * 16 / 9));
-    aspect-ratio: 16 / 9;
-  }
-  #controls {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    justify-content: center;
-    width: 100%;
-    max-width: 560px;
-  }
-  .label-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1px;
-    min-width: 86px;
-    padding: 8px 12px;
-    border: 2px solid #555e72;
-    border-radius: 10px;
-    background: linear-gradient(180deg, var(--steel), var(--steel-dark));
-    color: #eee;
-    font: inherit;
-    cursor: pointer;
-    user-select: none;
-    -webkit-user-select: none;
-    transition: transform .05s, border-color .1s;
-  }
-  .label-btn:active, .label-btn.flash {
-    transform: translateY(2px) scale(.97);
-    border-color: var(--accent);
-  }
-  .label-btn .fruit { font-size: 24px; line-height: 1.1; }
-  @media (max-width: 640px) {
-    #controls { gap: 8px; flex-wrap: nowrap; }
-    .label-btn { flex: 1; min-width: 0; padding: 12px 4px; }
-    .label-btn .fruit { font-size: 30px; }
-    .label-btn .key { font-size: 9px; }
-  }
-  .label-btn .plu {
-    background: #fffbe8;
-    color: #333;
-    font-size: 12px;
-    font-weight: 700;
-    padding: 0 8px;
     border-radius: 8px;
-    border: 1px solid #ccb;
+    box-shadow: 0 10px 40px rgba(0,0,0,.5);
+    width: min(100%, calc((100dvh - 12px) * 9 / 16));
+    aspect-ratio: 9 / 16;
   }
-  .label-btn .key { font-size: 10px; color: #9aa3b5; letter-spacing: .5px; }
 </style>
 </head>
 <body>
 <div id="wrap">
-  <canvas id="game" width="960" height="540"></canvas>
-  <div id="controls"></div>
+  <canvas id="game" width="540" height="960"></canvas>
 </div>
 
 <script>
@@ -104,23 +51,27 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
 
+const LANES = 4;
+const LANE_W = W / LANES;
+const laneX = i => LANE_W * (i + 0.5);
+
+const LABELER_Y = 300;        // fruit crossing this line gets labeled
+const STAMP_WINDOW = 16;      // extra reach beyond fruit radius
+const CARRIAGE_SPEED = 1700;  // px/s lateral travel of the labeler head
+
+const COMMODITIES = [
+  { id: "avocado", name: "AVOCADOS", plu: "4046" },
+  { id: "apple",   name: "APPLES",   plu: "4131" },
+  { id: "citrus",  name: "ORANGES",  plu: "4012" },
+  { id: "stone",   name: "PEACHES",  plu: "4044" },
+];
+
 // Text boost so HUD/messages stay readable when the canvas is shrunk on phones
 let uiBoost = 1;
 function updateUiBoost() {
   const cw = canvas.clientWidth || W;
-  uiBoost = Math.min(1.6, Math.max(1, 620 / cw));
+  uiBoost = Math.min(1.3, Math.max(1, 460 / cw));
 }
-
-const BELT_Y = 392;          // top surface of the belt
-const LABELER_X = W / 2;     // x position of the labeling head
-const HEAD_W = 64;
-
-const FRUIT_TYPES = [
-  { id: "avocado", name: "Avocado", plu: "4046", emoji: "\u{1F951}", key: "1", unlockLevel: 1 },
-  { id: "apple",   name: "Apple",   plu: "4131", emoji: "\u{1F34E}", key: "2", unlockLevel: 1 },
-  { id: "citrus",  name: "Orange",  plu: "4012", emoji: "\u{1F34A}", key: "3", unlockLevel: 2 },
-  { id: "stone",   name: "Peach",   plu: "4044", emoji: "\u{1F351}", key: "4", unlockLevel: 3 },
-];
 
 // ---------- Audio ----------
 let audioCtx = null;
@@ -138,35 +89,58 @@ function beep(freq, dur, type = "sine", vol = 0.15, when = 0) {
   o.stop(t + dur);
 }
 const sfx = {
-  stamp:   () => { beep(120, 0.08, "square", 0.2); },
-  correct: () => { beep(660, 0.08, "sine", 0.12); beep(880, 0.12, "sine", 0.12, 0.07); },
-  perfect: () => { beep(660, 0.07, "sine", 0.12); beep(880, 0.07, "sine", 0.12, 0.06); beep(1320, 0.14, "sine", 0.12, 0.12); },
-  wrong:   () => { beep(160, 0.3, "sawtooth", 0.18); },
-  whiff:   () => { beep(300, 0.06, "triangle", 0.08); },
-  miss:    () => { beep(220, 0.15, "square", 0.12); beep(150, 0.25, "square", 0.12, 0.12); },
-  levelup: () => { [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.12, "sine", 0.12, i * 0.09)); },
-  gameover:() => { [392, 330, 262, 196].forEach((f, i) => beep(f, 0.25, "triangle", 0.15, i * 0.2)); },
+  stamp:    () => { beep(120, 0.07, "square", 0.18); },
+  correct:  () => { beep(660, 0.08, "sine", 0.12); beep(880, 0.12, "sine", 0.12, 0.07); },
+  perfect:  () => { beep(660, 0.07, "sine", 0.12); beep(880, 0.07, "sine", 0.12, 0.06); beep(1320, 0.14, "sine", 0.12, 0.12); },
+  whiff:    () => { beep(300, 0.06, "triangle", 0.08); },
+  miss:     () => { beep(220, 0.15, "square", 0.12); beep(150, 0.25, "square", 0.12, 0.12); },
+  speedup:  () => { beep(523, 0.1, "sine", 0.12); beep(784, 0.16, "sine", 0.12, 0.09); },
+  changeover:() => { [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.12, "sine", 0.12, i * 0.09)); },
+  gameover: () => { [392, 330, 262, 196].forEach((f, i) => beep(f, 0.25, "triangle", 0.15, i * 0.2)); },
 };
 
 // ---------- Game state ----------
 const game = {
-  state: "menu",            // menu | playing | paused | gameover
+  state: "menu",              // menu | playing | paused | gameover
   fruits: [],
   texts: [],
   particles: [],
   score: 0,
   best: Number(localStorage.getItem("flh-best") || 0),
   lives: 3,
-  level: 1,
-  labeled: 0,               // correct labels this run
   combo: 0,
-  beltSpeed: 110,           // px per second
+  beltSpeed: 150,
+  speedSteps: 0,
+  processed: 0,               // fruits past the labeler (labeled or missed)
+  levelCount: 0,              // fruits processed in current commodity run
+  commodity: COMMODITIES[0],
+  commodityQueue: [],
+  shift: 1,                   // how many commodity runs completed + 1
+  changeover: false,          // draining the belt before the next commodity
   spawnTimer: 1,
-  headAnim: 0,              // 0..1 piston extension
-  headLabel: null,          // fruit type id shown on the piston
+  pattern: [],                // randomized lane order for upcoming spawns
+  carriageX: laneX(1),
+  targetLane: 1,
+  pending: false,             // a stamp is queued for carriage arrival
+  stampAnim: 0,
+  fingerRot: 0,
   shake: 0,
   time: 0,
 };
+
+function pickCommodity() {
+  if (game.commodityQueue.length === 0) {
+    const q = COMMODITIES.slice();
+    for (let i = q.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [q[i], q[j]] = [q[j], q[i]];
+    }
+    // Avoid repeating the commodity we just ran
+    if (q[0].id === game.commodity.id && q.length > 1) [q[0], q[1]] = [q[1], q[0]];
+    game.commodityQueue = q;
+  }
+  return game.commodityQueue.shift();
+}
 
 function reset() {
   game.fruits = [];
@@ -174,34 +148,76 @@ function reset() {
   game.particles = [];
   game.score = 0;
   game.lives = 3;
-  game.level = 1;
-  game.labeled = 0;
   game.combo = 0;
-  game.beltSpeed = 110;
+  game.beltSpeed = 150;
+  game.speedSteps = 0;
+  game.processed = 0;
+  game.levelCount = 0;
+  game.commodityQueue = [];
+  game.commodity = pickCommodity();
+  game.shift = 1;
+  game.changeover = false;
   game.spawnTimer = 1.2;
-  game.headAnim = 0;
+  game.pattern = [];
+  game.carriageX = laneX(1);
+  game.targetLane = 1;
+  game.pending = false;
+  game.stampAnim = 0;
   game.shake = 0;
 }
 
-function availableTypes() {
-  return FRUIT_TYPES.filter(f => f.unlockLevel <= game.level);
+// ---------- Spawning: randomized lane patterns ----------
+function nextPatternLane() {
+  if (game.pattern.length === 0) {
+    const p = [0, 1, 2, 3];
+    for (let i = p.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [p[i], p[j]] = [p[j], p[i]];
+    }
+    game.pattern = p;
+  }
+  return game.pattern.shift();
 }
 
-function spawnFruit() {
-  const types = availableTypes();
-  const type = types[Math.floor(Math.random() * types.length)];
+function laneIsClear(lane) {
+  for (const fr of game.fruits) {
+    if (fr.lane === lane && fr.y > H - 150) return false;
+  }
+  return true;
+}
+
+function spawnFruit(lane) {
   game.fruits.push({
-    type: type.id,
-    x: -50,
-    r: 26 + Math.random() * 5,
+    lane,
+    x: laneX(lane),
+    y: H + 45,
+    r: 27 + Math.random() * 5,
+    type: game.commodity.id,
+    plu: game.commodity.plu,
     labeled: false,
-    labelPlu: null,
-    wrong: false,
+    missed: false,
     rot: Math.random() * Math.PI * 2,
     bobSeed: Math.random() * 10,
   });
 }
 
+function trySpawn() {
+  let lane = nextPatternLane();
+  if (!laneIsClear(lane)) {
+    const open = [0, 1, 2, 3].filter(laneIsClear);
+    if (open.length === 0) return;
+    lane = open[Math.floor(Math.random() * open.length)];
+  }
+  spawnFruit(lane);
+  // Occasional simultaneous second fruit in another lane, more often later on
+  const doubleChance = Math.min(0.35, 0.04 + game.speedSteps * 0.05);
+  if (Math.random() < doubleChance) {
+    const open = [0, 1, 2, 3].filter(l => l !== lane && laneIsClear(l));
+    if (open.length) spawnFruit(open[Math.floor(Math.random() * open.length)]);
+  }
+}
+
+// ---------- Feedback helpers ----------
 function addText(x, y, str, color, size = 20) {
   game.texts.push({ x, y, str, color, size, life: 1 });
 }
@@ -218,7 +234,7 @@ function loseLife(reason, x, y) {
   game.lives--;
   game.combo = 0;
   game.shake = 8;
-  addText(x, y, reason, "#ff6b6b", 22);
+  addText(x, y, reason, "#ff6b6b", 20);
   if (game.lives <= 0) {
     game.state = "gameover";
     if (game.score > game.best) {
@@ -229,64 +245,77 @@ function loseLife(reason, x, y) {
   }
 }
 
-// ---------- Input: fire a label ----------
-function fireLabel(typeId) {
-  if (game.state === "menu" || game.state === "gameover") { startGame(); return; }
+// ---------- Throughput milestones ----------
+function fruitProcessed() {
+  game.processed++;
+  game.levelCount++;
+  if (game.processed % 15 === 0) {
+    game.speedSteps++;
+    game.beltSpeed *= 1.07;
+    addText(W / 2, LABELER_Y + 160, "LINE SPEED UP!", "#ffd166", 24);
+    sfx.speedup();
+  }
+  if (game.levelCount >= 30 && !game.changeover) {
+    game.changeover = true; // stop spawning, drain the belt, then switch commodity
+  }
+}
+
+function completeChangeover() {
+  game.changeover = false;
+  game.levelCount = 0;
+  game.shift++;
+  game.commodity = pickCommodity();
+  addText(W / 2, LABELER_Y + 130, "CHANGEOVER!", "#ffd166", 28);
+  addText(W / 2, LABELER_Y + 170, "NOW RUNNING: " + game.commodity.name + " · PLU " + game.commodity.plu, "#7CFC9A", 17);
+  sfx.changeover();
+  game.spawnTimer = 1.0;
+}
+
+// ---------- Input: send the labeler to a lane ----------
+function tapLane(lane) {
   if (game.state !== "playing") return;
+  game.targetLane = lane;
+  game.pending = true;
+  // Already on station: stamp immediately
+  if (Math.abs(game.carriageX - laneX(lane)) < 3) fireStamp();
+}
 
-  const type = FRUIT_TYPES.find(f => f.id === typeId);
-  game.headAnim = 1;
-  game.headLabel = typeId;
+function fireStamp() {
+  game.pending = false;
+  game.stampAnim = 1;
   sfx.stamp();
-  flashButton(typeId);
+  const lane = game.targetLane;
 
-  // Nearest unlabeled fruit under the head
   let target = null, bestDist = Infinity;
   for (const fr of game.fruits) {
-    const d = Math.abs(fr.x - LABELER_X);
-    if (!fr.labeled && d <= fr.r + 10 && d < bestDist) { bestDist = d; target = fr; }
+    if (fr.lane !== lane || fr.labeled || fr.missed) continue;
+    const d = Math.abs(fr.y - LABELER_Y);
+    if (d <= fr.r + STAMP_WINDOW && d < bestDist) { bestDist = d; target = fr; }
   }
 
   if (!target) {
-    addText(LABELER_X, BELT_Y - 90, "WASTED LABEL", "#9aa3b5", 16);
+    addText(laneX(lane), LABELER_Y - 40, "NO FRUIT", "#9aa3b5", 14);
     sfx.whiff();
     return;
   }
 
   target.labeled = true;
-  target.labelPlu = type.plu;
-
-  if (target.type === typeId) {
-    const accuracy = 1 - bestDist / (target.r + 10);
-    game.combo++;
-    game.labeled++;
-    const mult = 1 + Math.min(game.combo - 1, 10) * 0.1;
-    let pts = Math.round(100 * mult);
-    if (accuracy > 0.75) {
-      pts += 50;
-      addText(target.x, BELT_Y - 100, "DEAD CENTER +" + pts, "#7CFC9A", 22);
-      sfx.perfect();
-    } else {
-      addText(target.x, BELT_Y - 100, "+" + pts, "#7CFC9A", 20);
-      sfx.correct();
-    }
-    if (game.combo >= 3) addText(target.x, BELT_Y - 128, "x" + game.combo + " combo", "#ffd166", 14);
-    game.score += pts;
-    addBurst(target.x, BELT_Y - 40, "#7CFC9A", 8);
-
-    // Level up every 8 correct labels
-    if (game.labeled % 8 === 0) {
-      game.level++;
-      game.beltSpeed *= 1.13;
-      addText(W / 2, 170, "LEVEL " + game.level + (availableTypes().length > FRUIT_TYPES.filter(f => f.unlockLevel <= game.level - 1).length ? " — NEW FRUIT ON THE LINE!" : " — LINE SPEED UP!"), "#ffd166", 26);
-      sfx.levelup();
-    }
+  const accuracy = 1 - bestDist / (target.r + STAMP_WINDOW);
+  game.combo++;
+  const mult = 1 + Math.min(game.combo - 1, 10) * 0.1;
+  let pts = Math.round(100 * mult);
+  if (accuracy > 0.75) {
+    pts += 50;
+    addText(target.x, LABELER_Y - 50, "DEAD CENTER +" + pts, "#7CFC9A", 18);
+    sfx.perfect();
   } else {
-    target.wrong = true;
-    sfx.wrong();
-    addBurst(target.x, BELT_Y - 40, "#ff6b6b", 12);
-    loseLife("MISLABEL! That's a " + FRUIT_TYPES.find(f => f.id === target.type).name, target.x, BELT_Y - 100);
+    addText(target.x, LABELER_Y - 50, "+" + pts, "#7CFC9A", 17);
+    sfx.correct();
   }
+  if (game.combo >= 3) addText(target.x, LABELER_Y - 78, "x" + game.combo + " combo", "#ffd166", 13);
+  game.score += pts;
+  addBurst(target.x, LABELER_Y, "#7CFC9A", 8);
+  fruitProcessed();
 }
 
 function startGame() {
@@ -299,41 +328,54 @@ function startGame() {
 // ---------- Update ----------
 function update(dt) {
   game.time += dt;
+  game.fingerRot += dt * 2.2;
   if (game.state !== "playing") return;
 
-  // Spawning
-  game.spawnTimer -= dt;
-  if (game.spawnTimer <= 0) {
-    spawnFruit();
-    const base = Math.max(0.55, 1.5 - game.level * 0.08);
-    game.spawnTimer = base + Math.random() * base * 0.7;
-  }
-
-  // Fruit movement
-  for (const fr of game.fruits) {
-    fr.x += game.beltSpeed * dt;
-    fr.rot += game.beltSpeed * dt / fr.r * 0.15;
-  }
-
-  // Fruit leaving the belt
-  for (let i = game.fruits.length - 1; i >= 0; i--) {
-    const fr = game.fruits[i];
-    if (fr.x > W + 50) {
-      game.fruits.splice(i, 1);
-      if (!fr.labeled) {
-        sfx.miss();
-        loseLife("UNLABELED FRUIT SHIPPED!", W - 140, BELT_Y - 100);
-      }
+  // Spawning (paused during changeover drain)
+  if (!game.changeover) {
+    game.spawnTimer -= dt;
+    if (game.spawnTimer <= 0) {
+      trySpawn();
+      const gapPx = 200;                       // average spacing along the belt
+      const base = gapPx / game.beltSpeed;
+      game.spawnTimer = base * (0.7 + Math.random() * 0.8);
     }
+  } else if (game.fruits.length === 0) {
+    completeChangeover();
+  }
+
+  // Carriage travel; stamp on arrival
+  const tx = laneX(game.targetLane);
+  if (Math.abs(game.carriageX - tx) > 1) {
+    const dir = Math.sign(tx - game.carriageX);
+    game.carriageX += dir * CARRIAGE_SPEED * dt;
+    if (Math.sign(tx - game.carriageX) !== dir) game.carriageX = tx;
+  }
+  if (game.pending && Math.abs(game.carriageX - tx) <= 1) fireStamp();
+
+  // Fruit movement (bottom to top)
+  for (const fr of game.fruits) {
+    fr.y -= game.beltSpeed * dt;
+    fr.rot += game.beltSpeed * dt / fr.r * 0.1;
+    // Passed the labeler unlabeled = missed
+    if (!fr.labeled && !fr.missed && fr.y < LABELER_Y - fr.r - STAMP_WINDOW) {
+      fr.missed = true;
+      sfx.miss();
+      loseLife("MISSED!", fr.x, LABELER_Y - 60);
+      fruitProcessed();
+    }
+  }
+  for (let i = game.fruits.length - 1; i >= 0; i--) {
+    if (game.fruits[i].y < -50) game.fruits.splice(i, 1);
   }
 
   // Animations
-  game.headAnim = Math.max(0, game.headAnim - dt * 6);
+  game.stampAnim = Math.max(0, game.stampAnim - dt * 5);
   game.shake = Math.max(0, game.shake - dt * 30);
   for (let i = game.texts.length - 1; i >= 0; i--) {
     const t = game.texts[i];
-    t.life -= dt * 0.7;
-    t.y -= dt * 30;
+    t.life -= dt * 0.6;
+    t.y -= dt * 26;
     if (t.life <= 0) game.texts.splice(i, 1);
   }
   for (let i = game.particles.length - 1; i >= 0; i--) {
@@ -347,78 +389,49 @@ function update(dt) {
 }
 
 // ---------- Drawing ----------
-function drawBackground() {
-  // Factory wall
-  const wall = ctx.createLinearGradient(0, 0, 0, H);
-  wall.addColorStop(0, "#2c3444");
-  wall.addColorStop(1, "#222836");
-  ctx.fillStyle = wall;
+function drawBelts() {
+  // Belt surface
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "#262c38");
+  g.addColorStop(1, "#202531");
+  ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  // Wall panels
-  ctx.strokeStyle = "rgba(255,255,255,0.04)";
+  // Moving cross-seams (belt runs upward)
+  const offset = (game.time * (game.state === "playing" ? game.beltSpeed : 60)) % 64;
+  ctx.strokeStyle = "rgba(255,255,255,0.05)";
   ctx.lineWidth = 2;
-  for (let x = 60; x < W; x += 160) {
-    ctx.strokeRect(x, 30, 130, 250);
+  for (let y = -64 + offset; y < H + 64; y += 64) {
+    for (let l = 0; l < LANES; l++) {
+      ctx.beginPath();
+      ctx.moveTo(l * LANE_W + 8, y);
+      ctx.lineTo((l + 1) * LANE_W - 8, y + 6);
+      ctx.stroke();
+    }
   }
 
-  // Hanging sign
-  ctx.fillStyle = "#1c212d";
-  ctx.fillRect(W - 320, 46, 250, 54);
-  ctx.strokeStyle = "#4a5366";
-  ctx.strokeRect(W - 320, 46, 250, 54);
-  ctx.fillStyle = "#ffd166";
-  ctx.font = "bold 17px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("LINE 4 — PLU STATION", W - 195, 70);
-  ctx.fillStyle = "#9aa3b5";
-  ctx.font = "12px sans-serif";
-  ctx.fillText("QUALITY IS EVERYONE'S JOB", W - 195, 90);
-}
-
-function drawConveyor() {
-  // Frame
-  ctx.fillStyle = "#39404f";
-  ctx.fillRect(0, BELT_Y + 26, W, 14);
-  // Legs
-  ctx.fillStyle = "#2d3340";
-  for (let x = 70; x < W; x += 220) {
-    ctx.fillRect(x, BELT_Y + 38, 16, H - BELT_Y - 38);
-  }
-  // Belt
-  ctx.fillStyle = "#23272f";
-  ctx.fillRect(0, BELT_Y, W, 28);
-  // Moving belt seams
-  const offset = (game.time * (game.state === "playing" ? game.beltSpeed : 40)) % 56;
-  ctx.strokeStyle = "#3a3f4a";
-  ctx.lineWidth = 3;
-  for (let x = -56 + offset; x < W; x += 56) {
-    ctx.beginPath();
-    ctx.moveTo(x, BELT_Y + 3);
-    ctx.lineTo(x - 8, BELT_Y + 25);
-    ctx.stroke();
-  }
-  // Rollers
-  ctx.fillStyle = "#454c5c";
-  for (let x = 30; x < W; x += 110) {
-    ctx.beginPath();
-    ctx.arc(x, BELT_Y + 33, 7, 0, Math.PI * 2);
-    ctx.fill();
+  // Lane rails
+  for (let l = 0; l <= LANES; l++) {
+    const x = l * LANE_W;
+    ctx.fillStyle = "#39404f";
+    ctx.fillRect(x - 4, 0, 8, H);
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fillRect(x + 2, 0, 2, H);
   }
 }
 
-function drawFruitBody(fr) {
-  const y = BELT_Y - fr.r + 4 + Math.sin(game.time * 6 + fr.bobSeed) * 1.5;
+function drawFruitTop(fr) {
+  const wob = Math.sin(game.time * 6 + fr.bobSeed) * 1.5;
   ctx.save();
-  ctx.translate(fr.x, y);
+  ctx.translate(fr.x + wob, fr.y);
 
-  // Shadow on belt
+  // Drop shadow on the belt
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.beginPath();
-  ctx.ellipse(0, fr.r - 3, fr.r * 0.9, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(3, 4, fr.r * 0.95, fr.r * 0.9, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.rotate(Math.sin(fr.rot) * 0.06);
+  ctx.rotate(Math.sin(fr.rot) * 0.1);
 
   if (fr.type === "avocado") {
     const g = ctx.createRadialGradient(-fr.r * 0.3, -fr.r * 0.3, 4, 0, 0, fr.r * 1.2);
@@ -426,14 +439,13 @@ function drawFruitBody(fr) {
     g.addColorStop(1, "#2f4520");
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(0, 2, fr.r * 0.82, fr.r, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, fr.r * 0.78, fr.r, 0.2, 0, Math.PI * 2);
     ctx.fill();
-    // Bumpy skin speckles
     ctx.fillStyle = "rgba(0,0,0,0.18)";
     for (let i = 0; i < 14; i++) {
       const a = i * 2.39996 + fr.bobSeed;
-      const rr = (i % 5 + 2) / 7 * fr.r * 0.7;
-      ctx.fillRect(Math.cos(a) * rr, Math.sin(a) * rr * 1.15, 2, 2);
+      const rr = (i % 5 + 2) / 7 * fr.r * 0.65;
+      ctx.fillRect(Math.cos(a) * rr, Math.sin(a) * rr, 2, 2);
     }
   } else if (fr.type === "apple") {
     const g = ctx.createRadialGradient(-fr.r * 0.3, -fr.r * 0.3, 4, 0, 0, fr.r * 1.2);
@@ -443,17 +455,17 @@ function drawFruitBody(fr) {
     ctx.beginPath();
     ctx.arc(0, 0, fr.r, 0, Math.PI * 2);
     ctx.fill();
-    // Stem + leaf
+    // Stem well seen from above
+    ctx.fillStyle = "rgba(90,30,30,0.5)";
+    ctx.beginPath();
+    ctx.arc(0, 0, fr.r * 0.18, 0, Math.PI * 2);
+    ctx.fill();
     ctx.strokeStyle = "#6b4423";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(0, -fr.r + 4);
-    ctx.lineTo(2, -fr.r - 7);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(5, -7);
     ctx.stroke();
-    ctx.fillStyle = "#4f8f3a";
-    ctx.beginPath();
-    ctx.ellipse(9, -fr.r - 2, 8, 4, -0.5, 0, Math.PI * 2);
-    ctx.fill();
   } else if (fr.type === "citrus") {
     const g = ctx.createRadialGradient(-fr.r * 0.3, -fr.r * 0.3, 4, 0, 0, fr.r * 1.2);
     g.addColorStop(0, "#ffba49");
@@ -462,7 +474,6 @@ function drawFruitBody(fr) {
     ctx.beginPath();
     ctx.arc(0, 0, fr.r, 0, Math.PI * 2);
     ctx.fill();
-    // Peel dimples
     ctx.fillStyle = "rgba(160,80,0,0.35)";
     for (let i = 0; i < 12; i++) {
       const a = i * 2.39996 + 1;
@@ -471,9 +482,10 @@ function drawFruitBody(fr) {
       ctx.arc(Math.cos(a) * rr, Math.sin(a) * rr, 1.4, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Calyx star
     ctx.fillStyle = "#4f8f3a";
     ctx.beginPath();
-    ctx.ellipse(2, -fr.r + 2, 7, 3.5, -0.4, 0, Math.PI * 2);
+    ctx.arc(0, 0, fr.r * 0.12, 0, Math.PI * 2);
     ctx.fill();
   } else if (fr.type === "stone") {
     const g = ctx.createRadialGradient(-fr.r * 0.3, -fr.r * 0.3, 4, 0, 0, fr.r * 1.2);
@@ -483,17 +495,13 @@ function drawFruitBody(fr) {
     ctx.beginPath();
     ctx.arc(0, 0, fr.r, 0, Math.PI * 2);
     ctx.fill();
-    // Crease
+    // Suture crease across the top
     ctx.strokeStyle = "rgba(160,50,60,0.5)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(0, -fr.r + 3);
-    ctx.quadraticCurveTo(6, 0, 0, fr.r - 3);
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(fr.r * 0.3, fr.r * 0.5, fr.r * 0.15, fr.r * 0.95);
     ctx.stroke();
-    ctx.fillStyle = "#4f8f3a";
-    ctx.beginPath();
-    ctx.ellipse(-7, -fr.r + 1, 8, 4, 0.5, 0, Math.PI * 2);
-    ctx.fill();
   }
 
   // Highlight
@@ -502,124 +510,177 @@ function drawFruitBody(fr) {
   ctx.ellipse(-fr.r * 0.35, -fr.r * 0.4, fr.r * 0.22, fr.r * 0.12, -0.6, 0, Math.PI * 2);
   ctx.fill();
 
-  // Sticker
+  // PLU sticker (top view: right where the finger tapped it)
   if (fr.labeled) {
     ctx.save();
     ctx.rotate(-0.15);
-    ctx.fillStyle = fr.wrong ? "#ffd5d5" : "#fffbe8";
-    ctx.strokeStyle = fr.wrong ? "#d33" : "#ccb";
+    ctx.fillStyle = "#fffbe8";
+    ctx.strokeStyle = "#ccb";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.ellipse(0, -fr.r * 0.25, 16, 10, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 16, 10, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = fr.wrong ? "#c0392b" : "#333";
+    ctx.fillStyle = "#333";
     ctx.font = "bold 9px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(fr.labelPlu, 0, -fr.r * 0.25 + 3);
-    if (fr.wrong) {
-      ctx.strokeStyle = "#d33";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(-14, -fr.r * 0.25 - 9); ctx.lineTo(14, -fr.r * 0.25 + 9);
-      ctx.moveTo(14, -fr.r * 0.25 - 9); ctx.lineTo(-14, -fr.r * 0.25 + 9);
-      ctx.stroke();
-    }
+    ctx.fillText(fr.plu, 0, 3);
     ctx.restore();
+  }
+  // Missed fruit gets flagged
+  if (fr.missed) {
+    ctx.strokeStyle = "#ff6b6b";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-10, -10); ctx.lineTo(10, 10);
+    ctx.moveTo(10, -10); ctx.lineTo(-10, 10);
+    ctx.stroke();
   }
   ctx.restore();
 }
 
 function drawLabeler() {
-  const ext = game.headAnim;                  // 1 = fully extended
-  const pistonLen = 36 + ext * (BELT_Y - 188); // reach toward belt
-  ctx.save();
-  ctx.translate(LABELER_X, 0);
-
-  // Overhead gantry
-  ctx.fillStyle = "#39404f";
-  ctx.fillRect(-W / 2, 110, W, 12);
-  ctx.fillStyle = "#2d3340";
-  ctx.fillRect(-HEAD_W / 2 - 8, 110, HEAD_W + 16, 52);
-  ctx.strokeStyle = "#4a5366";
-  ctx.strokeRect(-HEAD_W / 2 - 8, 110, HEAD_W + 16, 52);
-
-  // Branding
-  ctx.fillStyle = "#ffd166";
-  ctx.font = "bold 11px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("LABELER", 0, 132);
-  ctx.fillStyle = "#9aa3b5";
-  ctx.font = "9px sans-serif";
-  ctx.fillText("MK-IV", 0, 146);
-
-  // Piston
-  ctx.fillStyle = "#5b6478";
-  ctx.fillRect(-7, 162, 14, pistonLen);
-  // Stamp pad
-  ctx.fillStyle = "#454c5c";
-  ctx.fillRect(-20, 162 + pistonLen, 40, 10);
-  // Label on the pad mid-stamp
-  if (ext > 0.15 && game.headLabel) {
-    const type = FRUIT_TYPES.find(f => f.id === game.headLabel);
-    ctx.fillStyle = "#fffbe8";
+  // Stamp pulse under the bridge, on the fruit
+  if (game.stampAnim > 0) {
+    const a = game.stampAnim;
+    ctx.strokeStyle = "rgba(255,209,102," + (a * 0.9) + ")";
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.ellipse(0, 162 + pistonLen + 14, 14, 8, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#333";
-    ctx.font = "bold 8px sans-serif";
-    ctx.fillText(type.plu, 0, 162 + pistonLen + 17);
+    ctx.arc(game.carriageX, LABELER_Y, 14 + (1 - a) * 26, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
-  // Target zone marker on the belt
-  ctx.strokeStyle = "rgba(255,209,102,0.5)";
+  // Gantry bridge across all lanes
+  ctx.fillStyle = "rgba(45,51,64,0.88)";
+  ctx.fillRect(0, LABELER_Y - 14, W, 28);
+  ctx.strokeStyle = "#4a5366";
   ctx.lineWidth = 2;
-  ctx.setLineDash([6, 6]);
-  ctx.beginPath();
-  ctx.moveTo(-34, BELT_Y - 2);
-  ctx.lineTo(-34, BELT_Y + 30);
-  ctx.moveTo(34, BELT_Y - 2);
-  ctx.lineTo(34, BELT_Y + 30);
-  ctx.stroke();
+  ctx.strokeRect(0, LABELER_Y - 14, W, 28);
+
+  // Stamp window guides per lane
+  ctx.strokeStyle = "rgba(255,209,102,0.35)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 5]);
+  for (let l = 0; l < LANES; l++) {
+    const x = laneX(l);
+    ctx.beginPath();
+    ctx.moveTo(x - 32, LABELER_Y + 44);
+    ctx.lineTo(x + 32, LABELER_Y + 44);
+    ctx.moveTo(x - 32, LABELER_Y - 44);
+    ctx.lineTo(x + 32, LABELER_Y - 44);
+    ctx.stroke();
+  }
   ctx.setLineDash([]);
+
+  // Carriage with rotary finger head
+  const cx = game.carriageX;
+  ctx.fillStyle = "#454c5c";
+  ctx.fillRect(cx - 30, LABELER_Y - 22, 60, 44);
+  ctx.strokeStyle = "#5b6478";
+  ctx.strokeRect(cx - 30, LABELER_Y - 22, 60, 44);
+
+  // Bellows fingers rotating around the head
+  const headR = 16;
+  const squash = 1 - game.stampAnim * 0.35; // head dips when stamping
+  ctx.save();
+  ctx.translate(cx, LABELER_Y);
+  ctx.scale(squash, squash);
+  ctx.fillStyle = "#39404f";
+  ctx.beginPath();
+  ctx.arc(0, 0, headR, 0, Math.PI * 2);
+  ctx.fill();
+  for (let i = 0; i < 4; i++) {
+    const a = game.fingerRot + i * Math.PI / 2;
+    const fx = Math.cos(a) * headR, fy = Math.sin(a) * headR;
+    ctx.fillStyle = "#ffd166";
+    ctx.beginPath();
+    ctx.arc(fx, fy, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#fffbe8";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 9, 6, -0.15, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
+
+  // Bridge label
+  ctx.fillStyle = "#9aa3b5";
+  ctx.font = "bold 10px sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("LABELER MK-V", 8, LABELER_Y - 20);
 }
 
+const PAUSE_BTN = { x: W - 50, y: 10, w: 40, h: 40 };
 function drawHUD() {
   const s = uiBoost;
+
+  // Top bar backdrop
+  const grad = ctx.createLinearGradient(0, 0, 0, 120);
+  grad.addColorStop(0, "rgba(10,12,18,0.85)");
+  grad.addColorStop(1, "rgba(10,12,18,0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, 120);
+
   ctx.textAlign = "left";
   ctx.fillStyle = "#fff";
-  ctx.font = "bold " + Math.round(24 * s) + "px sans-serif";
-  ctx.fillText(String(game.score).padStart(6, "0"), 20, 14 + 24 * s);
+  ctx.font = "bold " + Math.round(22 * s) + "px sans-serif";
+  ctx.fillText(String(game.score).padStart(6, "0"), 14, 12 + 22 * s);
   ctx.fillStyle = "#9aa3b5";
-  ctx.font = Math.round(12 * s) + "px sans-serif";
-  ctx.fillText("BEST " + game.best, 20, 14 + 24 * s + 18 * s);
+  ctx.font = Math.round(11 * s) + "px sans-serif";
+  ctx.fillText("BEST " + game.best, 14, 12 + 22 * s + 16 * s);
 
-  ctx.fillText("LEVEL " + game.level, 20, 14 + 24 * s + 36 * s);
+  // Commodity + progress, centered
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd166";
+  ctx.font = "bold " + Math.round(15 * s) + "px sans-serif";
+  ctx.fillText(game.changeover ? "CHANGEOVER…" : game.commodity.name + " · PLU " + game.commodity.plu, W / 2, 14 + 15 * s);
+  ctx.fillStyle = "#9aa3b5";
+  ctx.font = Math.round(11 * s) + "px sans-serif";
+  ctx.fillText("FRUIT " + Math.min(game.levelCount, 30) + "/30 · SPEED x" + (game.beltSpeed / 150).toFixed(2), W / 2, 18 + 15 * s + 15 * s);
 
-  // Lives as stickers
+  // Lives as PLU stickers under the score
   for (let i = 0; i < 3; i++) {
-    const x = 130 + 90 * s + i * 36;
+    const x = 28 + i * 34;
+    const y = 30 + 38 * s + 12;
     ctx.fillStyle = i < game.lives ? "#fffbe8" : "rgba(255,255,255,0.12)";
     ctx.strokeStyle = i < game.lives ? "#ccb" : "rgba(255,255,255,0.15)";
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.ellipse(x, 32, 14, 9, -0.15, 0, Math.PI * 2);
+    ctx.ellipse(x, y, 13, 8, -0.15, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     if (i < game.lives) {
       ctx.fillStyle = "#333";
-      ctx.font = "bold 8px sans-serif";
+      ctx.font = "bold 7px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("PLU", x, 35);
-      ctx.textAlign = "left";
+      ctx.fillText("PLU", x, y + 2.5);
     }
   }
 
   if (game.combo >= 3) {
     ctx.fillStyle = "#ffd166";
-    ctx.font = "bold " + Math.round(16 * s) + "px sans-serif";
+    ctx.font = "bold " + Math.round(14 * s) + "px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("COMBO x" + game.combo, W / 2, 24 + 16 * s);
+    ctx.fillText("COMBO x" + game.combo, W / 2, 70 + 14 * s);
+  }
+
+  // Pause button
+  if (game.state === "playing" || game.state === "paused") {
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    ctx.beginPath();
+    ctx.roundRect(PAUSE_BTN.x, PAUSE_BTN.y, PAUSE_BTN.w, PAUSE_BTN.h, 8);
+    ctx.fill();
+    ctx.fillStyle = "#cdd3de";
+    if (game.state === "playing") {
+      ctx.fillRect(PAUSE_BTN.x + 12, PAUSE_BTN.y + 11, 5, 18);
+      ctx.fillRect(PAUSE_BTN.x + 23, PAUSE_BTN.y + 11, 5, 18);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(PAUSE_BTN.x + 13, PAUSE_BTN.y + 10);
+      ctx.lineTo(PAUSE_BTN.x + 31, PAUSE_BTN.y + 20);
+      ctx.lineTo(PAUSE_BTN.x + 13, PAUSE_BTN.y + 30);
+      ctx.fill();
+    }
   }
 }
 
@@ -640,54 +701,59 @@ function drawTextsAndParticles() {
   ctx.globalAlpha = 1;
 }
 
-function drawOverlay() {
-  if (game.state === "playing") return;
-  ctx.fillStyle = "rgba(15,18,26,0.78)";
-  ctx.fillRect(0, 0, W, H);
-  ctx.textAlign = "center";
-
-  const s = uiBoost;
-  if (game.state === "menu") {
-    ctx.fillStyle = "#ffd166";
-    ctx.font = "bold " + Math.round(Math.min(52 * s, 66)) + "px sans-serif";
-    ctx.fillText("FRUIT LABELING HERO", W / 2, 140);
-    ctx.fillStyle = "#fff";
-    ctx.font = Math.round(20 * s) + "px sans-serif";
-    ctx.fillText("Stick the RIGHT PLU label on every fruit", W / 2, 210);
-    ctx.fillText("as it passes under the labeling head.", W / 2, 210 + 30 * s);
-    ctx.fillStyle = "#9aa3b5";
-    ctx.font = Math.round(16 * s) + "px sans-serif";
-    ctx.fillText("Tap the label buttons (or keys 1–4)", W / 2, 230 + 64 * s);
-    ctx.fillText("Wrong label or unlabeled fruit = strike.", W / 2, 230 + 90 * s);
-    ctx.fillText("Three strikes and the shift is over.", W / 2, 230 + 116 * s);
-    ctx.fillStyle = "#7CFC9A";
-    ctx.font = "bold " + Math.round(22 * s) + "px sans-serif";
-    ctx.fillText(blink() ? "TAP ANY LABEL TO CLOCK IN" : "", W / 2, 250 + 160 * s);
-  } else if (game.state === "paused") {
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold " + Math.round(40 * s) + "px sans-serif";
-    ctx.fillText("LINE STOPPED", W / 2, H / 2 - 10);
-    ctx.fillStyle = "#9aa3b5";
-    ctx.font = Math.round(18 * s) + "px sans-serif";
-    ctx.fillText("Press P to restart the conveyor", W / 2, H / 2 + 22 + 18 * s);
-  } else if (game.state === "gameover") {
-    ctx.fillStyle = "#ff6b6b";
-    ctx.font = "bold " + Math.round(44 * s) + "px sans-serif";
-    ctx.fillText("SHIFT OVER", W / 2, 170);
-    ctx.fillStyle = "#fff";
-    ctx.font = Math.round(26 * s) + "px sans-serif";
-    ctx.fillText("Score: " + game.score, W / 2, 180 + 56 * s);
-    ctx.fillStyle = game.score >= game.best && game.score > 0 ? "#ffd166" : "#9aa3b5";
-    ctx.font = Math.round(18 * s) + "px sans-serif";
-    ctx.fillText(game.score >= game.best && game.score > 0 ? "NEW PLANT RECORD!" : "Plant record: " + game.best, W / 2, 190 + 86 * s);
-    ctx.fillStyle = "#7CFC9A";
-    ctx.font = "bold " + Math.round(20 * s) + "px sans-serif";
-    ctx.fillText(blink() ? "TAP ANY LABEL FOR NEXT SHIFT" : "", W / 2, 220 + 140 * s);
-  }
-}
-
 function blink() {
   return Math.floor(game.time * 2) % 2 === 0;
+}
+
+function drawOverlay() {
+  if (game.state === "playing") return;
+  ctx.fillStyle = "rgba(10,13,20,0.8)";
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = "center";
+  const s = uiBoost;
+
+  if (game.state === "menu") {
+    ctx.fillStyle = "#ffd166";
+    ctx.font = "bold " + Math.round(Math.min(40 * s, 46)) + "px sans-serif";
+    ctx.fillText("FRUIT", W / 2, 220);
+    ctx.fillText("LABELING HERO", W / 2, 220 + 46 * s);
+    ctx.fillStyle = "#fff";
+    ctx.font = Math.round(18 * s) + "px sans-serif";
+    ctx.fillText("Fruit runs up 4 lanes.", W / 2, 380);
+    ctx.fillText("TAP A LANE to send the labeler", W / 2, 380 + 28 * s);
+    ctx.fillText("and tag fruit crossing the bridge.", W / 2, 380 + 56 * s);
+    ctx.fillStyle = "#9aa3b5";
+    ctx.font = Math.round(14 * s) + "px sans-serif";
+    ctx.fillText("One commodity at a time — every 30 fruits", W / 2, 520);
+    ctx.fillText("the line changes over. It only gets faster.", W / 2, 520 + 22 * s);
+    ctx.fillText("Miss 3 and the shift is over.", W / 2, 520 + 44 * s);
+    ctx.fillStyle = "#7CFC9A";
+    ctx.font = "bold " + Math.round(20 * s) + "px sans-serif";
+    ctx.fillText(blink() ? "TAP TO CLOCK IN" : "", W / 2, 680);
+  } else if (game.state === "paused") {
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold " + Math.round(34 * s) + "px sans-serif";
+    ctx.fillText("LINE STOPPED", W / 2, H / 2 - 20);
+    ctx.fillStyle = "#9aa3b5";
+    ctx.font = Math.round(16 * s) + "px sans-serif";
+    ctx.fillText("Tap ▶ to restart the conveyor", W / 2, H / 2 + 24);
+  } else if (game.state === "gameover") {
+    ctx.fillStyle = "#ff6b6b";
+    ctx.font = "bold " + Math.round(38 * s) + "px sans-serif";
+    ctx.fillText("SHIFT OVER", W / 2, 320);
+    ctx.fillStyle = "#fff";
+    ctx.font = Math.round(24 * s) + "px sans-serif";
+    ctx.fillText("Score: " + game.score, W / 2, 320 + 60 * s);
+    ctx.fillStyle = "#9aa3b5";
+    ctx.font = Math.round(15 * s) + "px sans-serif";
+    ctx.fillText("Fruit labeled this shift: " + game.processed, W / 2, 320 + 92 * s);
+    ctx.fillStyle = game.score >= game.best && game.score > 0 ? "#ffd166" : "#9aa3b5";
+    ctx.font = Math.round(16 * s) + "px sans-serif";
+    ctx.fillText(game.score >= game.best && game.score > 0 ? "NEW PLANT RECORD!" : "Plant record: " + game.best, W / 2, 320 + 124 * s);
+    ctx.fillStyle = "#7CFC9A";
+    ctx.font = "bold " + Math.round(18 * s) + "px sans-serif";
+    ctx.fillText(blink() ? "TAP FOR NEXT SHIFT" : "", W / 2, 620);
+  }
 }
 
 function draw() {
@@ -695,9 +761,8 @@ function draw() {
   if (game.shake > 0) {
     ctx.translate((Math.random() - 0.5) * game.shake, (Math.random() - 0.5) * game.shake);
   }
-  drawBackground();
-  drawConveyor();
-  for (const fr of game.fruits) drawFruitBody(fr);
+  drawBelts();
+  for (const fr of game.fruits) drawFruitTop(fr);
   drawLabeler();
   drawTextsAndParticles();
   drawHUD();
@@ -717,28 +782,41 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-// ---------- Controls ----------
-const controlsEl = document.getElementById("controls");
-const buttons = {};
-for (const f of FRUIT_TYPES) {
-  const b = document.createElement("button");
-  b.className = "label-btn";
-  b.innerHTML = `<span class="fruit">${f.emoji}</span><span class="plu">${f.plu}</span><span class="key">${f.name} — ${f.key}</span>`;
-  b.addEventListener("pointerdown", e => { e.preventDefault(); fireLabel(f.id); });
-  controlsEl.appendChild(b);
-  buttons[f.id] = b;
+// ---------- Input ----------
+function canvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * (W / rect.width),
+    y: (e.clientY - rect.top) * (H / rect.height),
+  };
 }
 
-function flashButton(typeId) {
-  const b = buttons[typeId];
-  b.classList.add("flash");
-  setTimeout(() => b.classList.remove("flash"), 100);
-}
+canvas.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  const p = canvasPos(e);
+
+  if (game.state === "menu" || game.state === "gameover") { startGame(); return; }
+
+  // Pause button
+  if (p.x >= PAUSE_BTN.x && p.x <= PAUSE_BTN.x + PAUSE_BTN.w &&
+      p.y >= PAUSE_BTN.y && p.y <= PAUSE_BTN.y + PAUSE_BTN.h) {
+    game.state = game.state === "playing" ? "paused" : "playing";
+    return;
+  }
+  if (game.state === "paused") { game.state = "playing"; return; }
+
+  tapLane(Math.max(0, Math.min(LANES - 1, Math.floor(p.x / LANE_W))));
+});
 
 window.addEventListener("keydown", e => {
   if (e.repeat) return;
-  const f = FRUIT_TYPES.find(t => t.key === e.key);
-  if (f) { e.preventDefault(); fireLabel(f.id); return; }
+  const lane = ["1", "2", "3", "4"].indexOf(e.key);
+  if (lane >= 0) {
+    e.preventDefault();
+    if (game.state === "menu" || game.state === "gameover") startGame();
+    else tapLane(lane);
+    return;
+  }
   if (e.key === "p" || e.key === "P") {
     if (game.state === "playing") game.state = "paused";
     else if (game.state === "paused") game.state = "playing";
@@ -747,9 +825,6 @@ window.addEventListener("keydown", e => {
     e.preventDefault();
     startGame();
   }
-});
-canvas.addEventListener("pointerdown", () => {
-  if (game.state === "menu" || game.state === "gameover") startGame();
 });
 </script>
 </body>
