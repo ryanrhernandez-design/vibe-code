@@ -155,6 +155,8 @@ const laneX = i => LANE_W * (i + 0.5);
 const LABELER_Y = 700;        // low on screen: easy thumb reach
 const STAMP_WINDOW = 16;      // extra reach beyond fruit radius
 const CUP_PITCH = 112;        // spacing between carrier cups along the belt
+const START_CPS = 1.5;        // line speed at clock-in, in cups per second
+const CPS_PER_LEVEL = 1.0;    // line speed gained at every commodity changeover
 const STAGE_SIZE = 30;        // fruits per commodity run
 const CRIT_STREAK = 3;        // perfect hits in a row for a critical strike
 
@@ -214,8 +216,7 @@ const game = {
   critTimer: 0,
   critX: 0,
   critY: 0,
-  beltSpeed: 150,
-  speedSteps: 0,
+  beltSpeed: START_CPS * CUP_PITCH,
   processed: 0,               // fruits past the labelers (labeled or missed)
   levelCount: 0,              // stage progress (crits add a bonus fruit)
   commodity: COMMODITIES[0],
@@ -252,8 +253,7 @@ function reset() {
   game.perfectStreak = 0;
   game.critCount = 0;
   game.critTimer = 0;
-  game.beltSpeed = 150;
-  game.speedSteps = 0;
+  game.beltSpeed = START_CPS * CUP_PITCH;
   game.processed = 0;
   game.levelCount = 0;
   game.commodityQueue = [];
@@ -298,7 +298,7 @@ function makeRow(y, fillable) {
   if (!fillable || game.state !== "playing" || game.changeover) return;
 
   // Randomized fill: empty rows, singles from a shuffled bag, doubles at speed
-  const doubleChance = Math.min(0.28, 0.06 + game.speedSteps * 0.04);
+  const doubleChance = Math.min(0.28, 0.06 + (game.shift - 1) * 0.05);
   const r = Math.random();
   if (r < 0.25) return;                                   // empty cups ride through
   const lane = nextPatternLane();
@@ -366,12 +366,6 @@ function bumpStage(n) {
 function fruitProcessed() {
   game.processed++;
   bumpStage(1);
-  if (game.processed % 15 === 0) {
-    game.speedSteps++;
-    game.beltSpeed *= 1.07;
-    addText(W / 2, LABELER_Y - 180, "LINE SPEED UP!", "#ffd166", 24);
-    sfx.speedup();
-  }
 }
 
 function completeChangeover() {
@@ -379,8 +373,11 @@ function completeChangeover() {
   game.levelCount = 0;
   game.shift++;
   game.commodity = pickCommodity();
+  game.beltSpeed += CPS_PER_LEVEL * CUP_PITCH;
   addText(W / 2, LABELER_Y - 240, "CHANGEOVER!", "#ffd166", 28);
   addText(W / 2, LABELER_Y - 200, "NOW RUNNING: " + game.commodity.name + " · PLU " + game.commodity.plu, "#7CFC9A", 16);
+  addText(W / 2, LABELER_Y - 168, "LINE SPEED UP: " + (game.beltSpeed / CUP_PITCH).toFixed(1) + " CUPS/SEC", "#ffd166", 16);
+  sfx.speedup();
   sfx.changeover();
 }
 
