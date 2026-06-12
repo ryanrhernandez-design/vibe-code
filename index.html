@@ -37,11 +37,107 @@
     aspect-ratio: 9 / 16;
     touch-action: none; /* full multi-touch: no browser gestures on the play area */
   }
+  /* ---- Player name + Top 100 leaderboard (ported from Nemo's adventure) ---- */
+  #nameBtn, #lbBtn {
+    position: fixed;
+    top: max(10px, env(safe-area-inset-top));
+    z-index: 5;
+    font: bold 14px -apple-system, "Segoe UI", Arial, sans-serif;
+    color: #fff;
+    background: rgba(34, 40, 54, 0.85);
+    border: 2px solid #ffd166;
+    border-radius: 18px;
+    padding: 7px 14px;
+    cursor: pointer;
+  }
+  #nameBtn { left: 10px; }
+  #lbBtn { right: 10px; }
+  body.inplay #nameBtn, body.inplay #lbBtn { display: none; }
+  #lbOverlay, #nameOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 11, 18, 0.78);
+  }
+  #lbOverlay.open, #nameOverlay.open { display: flex; }
+  #lbCard {
+    background: #2b3140;
+    border: 3px solid #ffd166;
+    border-radius: 16px;
+    padding: 16px;
+    width: min(88vw, 360px);
+    max-height: 78vh;
+    display: flex;
+    flex-direction: column;
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    color: #fff;
+  }
+  #lbCard h2 { font-size: 20px; color: #ffd166; text-align: center; margin-bottom: 2px; }
+  #lbCard .lbSub { font-size: 12px; color: #9aa3b5; text-align: center; margin-bottom: 10px; }
+  #lbList { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .lbRow { display: flex; align-items: center; padding: 7px 6px; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 15px; }
+  .lbRow .rank { width: 36px; color: #9aa3b5; font-weight: 600; }
+  .lbRow .nm { flex: 1; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lbRow .nm.me { color: #ffd166; }
+  .lbRow .sc { font-weight: 800; color: #ffd166; margin-left: 8px; }
+  #lbClose, #nameSave {
+    margin-top: 12px;
+    font: bold 16px inherit;
+    color: #2b2410;
+    background: #ffd166;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 26px;
+    cursor: pointer;
+  }
+  #nameCard {
+    background: #2b3140;
+    border: 3px solid #ffd166;
+    border-radius: 16px;
+    padding: 22px;
+    width: min(82vw, 320px);
+    text-align: center;
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    color: #fff;
+  }
+  #nameCard h2 { margin-bottom: 12px; font-size: 20px; color: #ffd166; }
+  #nameInput {
+    width: 100%;
+    font: bold 18px inherit;
+    text-align: center;
+    padding: 9px;
+    border: 2px solid #5b6478;
+    border-radius: 10px;
+    background: #fff;
+    color: #2b2410;
+    margin-bottom: 2px;
+  }
 </style>
 </head>
 <body>
 <div id="wrap">
   <canvas id="game" width="540" height="960"></canvas>
+</div>
+<button id="nameBtn" type="button">👤</button>
+<button id="lbBtn" type="button">🏆 Top 100</button>
+<div id="lbOverlay">
+  <div id="lbCard">
+    <h2>🏆 TOP 100</h2>
+    <div class="lbSub" id="lbSub">loading…</div>
+    <div id="lbList"></div>
+    <button id="lbClose" type="button">Close</button>
+  </div>
+</div>
+<div id="nameOverlay">
+  <div id="nameCard">
+    <h2>What's your name?</h2>
+    <input id="nameInput" maxlength="12" autocomplete="off" placeholder="Hero">
+    <br>
+    <button id="nameSave" type="button">Save</button>
+  </div>
 </div>
 
 <script>
@@ -250,6 +346,11 @@ function loseLife(reason, x, y) {
       game.best = game.score;
       localStorage.setItem("flh-best", String(game.best));
     }
+    if (game.score > 0) {
+      addToLB(playerName, game.score);
+      pushRemoteScore(playerName, game.score);
+    }
+    logPlay(game.score);
     sfx.gameover();
   }
 }
@@ -343,8 +444,157 @@ function startGame() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === "suspended") audioCtx.resume();
   reset();
+  refreshRemoteLB(); // keep the global top-100 fresh between runs
   game.state = "playing";
 }
+
+// ---------- Player name + Top 100 leaderboard (ported from Nemo's adventure) ----------
+const VERSION = "v1";
+const nameBtn = document.getElementById("nameBtn");
+const nameOverlay = document.getElementById("nameOverlay");
+const nameInput = document.getElementById("nameInput");
+const nameSave = document.getElementById("nameSave");
+const lbBtn = document.getElementById("lbBtn");
+const lbOverlay = document.getElementById("lbOverlay");
+const lbList = document.getElementById("lbList");
+const lbSub = document.getElementById("lbSub");
+const lbClose = document.getElementById("lbClose");
+
+// First visit on this device: borrow the name the player already uses in
+// Nemo's adventure, if there is one.
+let playerName = localStorage.getItem("flhName") || localStorage.getItem("royalNemoName") || "";
+// permanent unique id for this device: renames only ever touch scores
+// carrying this id, so one player can never hijack another's entries
+let PID = localStorage.getItem("flhPid");
+if (!PID) {
+  PID = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  localStorage.setItem("flhPid", PID);
+}
+function getLB() {
+  try { return JSON.parse(localStorage.getItem("flhLB")) || []; }
+  catch (e) { return []; }
+}
+function saveLB(lb) {
+  localStorage.setItem("flhLB", JSON.stringify(lb));
+}
+function addToLB(name, sc) {
+  const lb = getLB();
+  lb.push({ name, score: sc, pid: PID });
+  lb.sort((a, b) => b.score - a.score);
+  saveLB(lb.slice(0, 100));
+}
+function setName(newName) {
+  newName = (newName || "").trim().slice(0, 12) || "Hero";
+  // renaming carries all of your existing leaderboard scores with you
+  const oldName = playerName;
+  const lb = getLB();
+  for (const e of lb) e.name = newName; // the local board is this device's own scores
+  saveLB(lb);
+  playerName = newName;
+  localStorage.setItem("flhName", newName);
+  nameBtn.textContent = "👤 " + newName;
+  renameRemote(oldName, newName);
+}
+
+// Cross-device leaderboard (Firebase Realtime DB over REST) — same database
+// as Nemo's adventure, namespaced under /flh so the two boards never mix.
+// Empty string = this device only.
+const REMOTE_DB = "https://royal-nemo-default-rtdb.firebaseio.com";
+const SCORES_PATH = "/flh/scores.json";
+const PLAYS_PATH = "/flh/plays.json";
+let remoteLB = null; // latest fetched global top-100
+
+function lbTop() {
+  return remoteLB || getLB();
+}
+async function refreshRemoteLB() {
+  if (!REMOTE_DB) return;
+  try {
+    const res = await fetch(REMOTE_DB + SCORES_PATH);
+    const data = await res.json() || {};
+    const all = Object.values(data).filter(e => e && e.name && typeof e.score === "number");
+    all.sort((a, b) => b.score - a.score);
+    remoteLB = all.slice(0, 100);
+  } catch (e) { /* offline: keep showing the last list we had */ }
+}
+function pushRemoteScore(name, sc) {
+  if (!REMOTE_DB) return;
+  fetch(REMOTE_DB + SCORES_PATH, {
+    method: "POST",
+    body: JSON.stringify({ name, score: sc, ts: Date.now(), pid: PID })
+  }).then(refreshRemoteLB).catch(() => {});
+}
+async function renameRemote(oldName, newName) {
+  if (!REMOTE_DB || oldName === newName) return;
+  try {
+    const res = await fetch(REMOTE_DB + SCORES_PATH);
+    const data = await res.json() || {};
+    const updates = {};
+    for (const [k, e] of Object.entries(data)) {
+      if (e && e.pid === PID) updates[k + "/name"] = newName;
+    }
+    if (Object.keys(updates).length) {
+      await fetch(REMOTE_DB + SCORES_PATH, { method: "PATCH", body: JSON.stringify(updates) });
+    }
+    refreshRemoteLB();
+  } catch (e) { /* offline */ }
+}
+// developer-only play log: one entry per finished run, written to a node
+// the public can't read (viewable on the Firebase console / admin dashboard)
+function logPlay(finalScore) {
+  if (!REMOTE_DB) return;
+  try {
+    fetch(REMOTE_DB + PLAYS_PATH, {
+      method: "POST",
+      body: JSON.stringify({ name: playerName, ts: Date.now(), v: VERSION, score: finalScore, shift: game.shift, fruits: game.processed, crits: game.critCount })
+    }).catch(() => {});
+  } catch (e) { /* logging is best-effort */ }
+}
+
+function escapeHtml(x) {
+  return String(x).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function renderLBOverlay() {
+  const lb = lbTop().slice(0, 100);
+  lbSub.textContent = remoteLB ? "global — all devices" : "this device only";
+  lbList.innerHTML = lb.length
+    ? lb.map((e, i) =>
+        `<div class="lbRow"><span class="rank">${i + 1}</span>` +
+        `<span class="nm${(e.pid ? e.pid === PID : e.name === playerName) ? " me" : ""}">${escapeHtml(e.name)}</span>` +
+        `<span class="sc">${e.score}</span></div>`).join("")
+    : '<div class="lbRow">No scores yet — be the first!</div>';
+}
+lbBtn.addEventListener("click", () => {
+  lbOverlay.classList.add("open");
+  renderLBOverlay();
+  Promise.resolve(refreshRemoteLB()).then(renderLBOverlay).catch(() => {});
+});
+lbClose.addEventListener("click", () => lbOverlay.classList.remove("open"));
+
+function openNameOverlay() {
+  nameInput.value = playerName;
+  nameOverlay.classList.add("open");
+  setTimeout(() => nameInput.focus(), 50);
+}
+function closeNameOverlay() {
+  setName(nameInput.value);
+  nameOverlay.classList.remove("open");
+  nameInput.blur();
+}
+nameBtn.addEventListener("click", openNameOverlay);
+nameSave.addEventListener("click", closeNameOverlay);
+nameInput.addEventListener("keydown", e => { if (e.code === "Enter") closeNameOverlay(); });
+if (playerName) {
+  nameBtn.textContent = "👤 " + playerName;
+  if (!localStorage.getItem("flhName")) localStorage.setItem("flhName", playerName);
+} else {
+  setName("Hero");
+  openNameOverlay(); // first visit: ask for a name
+}
+function overlaysOpen() {
+  return nameOverlay.classList.contains("open") || lbOverlay.classList.contains("open");
+}
+refreshRemoteLB();
 
 // ---------- Update ----------
 function update(dt) {
@@ -847,6 +1097,8 @@ function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   updateUiBoost();
+  // the name/leaderboard buttons stay out of the way during a shift
+  document.body.classList.toggle("inplay", game.state === "playing" || game.state === "paused");
   update(dt);
   draw();
   requestAnimationFrame(frame);
@@ -864,6 +1116,7 @@ function canvasPos(e) {
 
 canvas.addEventListener("pointerdown", e => {
   e.preventDefault();
+  if (overlaysOpen()) return;
   const p = canvasPos(e);
 
   if (game.state === "menu" || game.state === "gameover") { startGame(); return; }
@@ -880,6 +1133,7 @@ canvas.addEventListener("pointerdown", e => {
 
 window.addEventListener("keydown", e => {
   if (e.repeat) return;
+  if (document.activeElement === nameInput || overlaysOpen()) return;
   const lane = ["1", "2", "3", "4"].indexOf(e.key);
   if (lane >= 0) {
     e.preventDefault();

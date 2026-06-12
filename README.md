@@ -33,6 +33,19 @@ Open `index.html` in any modern browser — designed for phones in portrait.
 - A fruit that passes the labeler unstickered is a strike — three strikes and
   the shift is over. High score persists as your plant record.
 
+## Leaderboard
+
+Same system as Nemo's adventure: a 👤 name button and a 🏆 Top 100 board
+(visible outside of a shift). Scores post to the shared Firebase Realtime
+Database, namespaced under `/flh` so the two games' boards never mix, with a
+device-local fallback when offline. Renames carry your existing scores via a
+per-device id, and each finished run logs a private play entry under
+`/flh/plays` for the admin dashboard.
+
+> If the global board shows "this device only" everywhere, add read/write
+> rules for the `flh` node in the Firebase console:
+> `"flh": { "scores": { ".read": true, ".write": true }, "plays": { ".read": false, ".write": true } }`
+
 ## Ideas for future shifts
 
 - Label cassette reloads (limited stickers, reload mid-rush)
