@@ -60,7 +60,7 @@ const LABELER_Y = 700;        // low on screen: easy thumb reach
 const STAMP_WINDOW = 16;      // extra reach beyond fruit radius
 const CUP_PITCH = 112;        // spacing between carrier cups along the belt
 const STAGE_SIZE = 30;        // fruits per commodity run
-const CRIT_STREAK = 5;        // perfect hits in a row for a critical strike
+const CRIT_STREAK = 3;        // perfect hits in a row for a critical strike
 
 const COMMODITIES = [
   { id: "avocado", name: "AVOCADOS", plu: "4046" },
@@ -707,7 +707,16 @@ function drawHUD() {
   ctx.fillText(game.changeover ? "CHANGEOVER…" : game.commodity.name + " · PLU " + game.commodity.plu, W / 2, 14 + 15 * s);
   ctx.fillStyle = "#9aa3b5";
   ctx.font = Math.round(11 * s) + "px sans-serif";
-  ctx.fillText("FRUIT " + Math.min(game.levelCount, STAGE_SIZE) + "/" + STAGE_SIZE + " · SPEED x" + (game.beltSpeed / 150).toFixed(2), W / 2, 18 + 15 * s + 15 * s);
+  ctx.fillText("FRUIT " + Math.min(game.levelCount, STAGE_SIZE) + "/" + STAGE_SIZE, W / 2, 18 + 15 * s + 15 * s);
+
+  // Line speed, top right under the pause button
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#ffd166";
+  ctx.font = "bold " + Math.round(14 * s) + "px sans-serif";
+  ctx.fillText((game.beltSpeed / CUP_PITCH).toFixed(2), W - 14, 58 + 14 * s);
+  ctx.fillStyle = "#9aa3b5";
+  ctx.font = Math.round(9 * s) + "px sans-serif";
+  ctx.fillText("CUPS/SEC", W - 14, 62 + 14 * s + 10 * s);
 
   for (let i = 0; i < 3; i++) {
     const x = 28 + i * 34;

@@ -21,7 +21,7 @@ Open `index.html` in any modern browser — designed for phones in portrait.
   sorter.
 - Tag fruit while it's inside the dashed window around the bridge — dead-center
   hits earn an accuracy bonus, and consecutive tags build a combo.
-- **5 dead-center hits in a row = CRITICAL STRIKE**: double points on that tag
+- **3 dead-center hits in a row = CRITICAL STRIKE**: double points on that tag
   and one fruit off the stage total, with a suitably dramatic flash. The pips
   under the bridge track your streak.
 - **One commodity at a time**: avocados (PLU 4046), apples (4131), oranges
