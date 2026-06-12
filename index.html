@@ -113,7 +113,6 @@ const game = {
   score: 0,
   best: Number(localStorage.getItem("flh-best") || 0),
   lives: 3,
-  combo: 0,
   perfectStreak: 0,
   critCount: 0,
   critTimer: 0,
@@ -154,7 +153,6 @@ function reset() {
   game.particles = [];
   game.score = 0;
   game.lives = 3;
-  game.combo = 0;
   game.perfectStreak = 0;
   game.critCount = 0;
   game.critTimer = 0;
@@ -243,7 +241,6 @@ function addBurst(x, y, color, n = 10) {
 
 function loseLife(reason, x, y) {
   game.lives--;
-  game.combo = 0;
   game.perfectStreak = 0;
   game.shake = 8;
   addText(x, y, reason, "#ff6b6b", 20);
@@ -307,42 +304,37 @@ function tapLane(lane) {
 
   target.labeled = true;
   const accuracy = 1 - bestDist / (target.r + STAMP_WINDOW);
-  game.combo++;
-  const mult = 1 + Math.min(game.combo - 1, 10) * 0.1;
-  let pts;
+  let pts = 1; // simple scoring: one point per labeled fruit
 
   if (accuracy > 0.75) {
     game.perfectStreak++;
-    pts = Math.round(100 * mult) + 50;
 
     if (game.perfectStreak >= CRIT_STREAK) {
-      // CRITICAL STRIKE: double points + one fruit off the stage total
+      // CRITICAL STRIKE: counts as 2 points + one fruit off the stage total
       game.perfectStreak = 0;
       game.critCount++;
-      pts *= 2;
+      pts = 2;
       game.critTimer = 1;
       game.critX = target.x;
       game.critY = LABELER_Y;
       game.shake = 6;
       addText(target.x, LABELER_Y - 70, "CRITICAL STRIKE!", "#ffd166", 26);
-      addText(target.x, LABELER_Y - 38, "+" + pts + " · −1 FRUIT TO STAGE", "#7CFC9A", 15);
+      addText(target.x, LABELER_Y - 38, "+2 · −1 FRUIT TO STAGE", "#7CFC9A", 15);
       addBurst(target.x, LABELER_Y, "#ffd166", 22);
       sfx.crit();
       bumpStage(1); // the bonus fruit
     } else {
-      addText(target.x, LABELER_Y - 50, "DEAD CENTER +" + pts, "#7CFC9A", 18);
+      addText(target.x, LABELER_Y - 50, "DEAD CENTER +1", "#7CFC9A", 18);
       addBurst(target.x, LABELER_Y, "#7CFC9A", 8);
       sfx.perfect();
     }
   } else {
     game.perfectStreak = 0;
-    pts = Math.round(100 * mult);
-    addText(target.x, LABELER_Y - 50, "+" + pts, "#7CFC9A", 17);
+    addText(target.x, LABELER_Y - 50, "+1", "#7CFC9A", 17);
     addBurst(target.x, LABELER_Y, "#7CFC9A", 6);
     sfx.correct();
   }
 
-  if (game.combo >= 3) addText(target.x, LABELER_Y - 95, "x" + game.combo + " combo", "#ffd166", 13);
   game.score += pts;
   fruitProcessed();
 }
@@ -687,19 +679,20 @@ const PAUSE_BTN = { x: W - 50, y: 10, w: 40, h: 40 };
 function drawHUD() {
   const s = uiBoost;
 
-  const grad = ctx.createLinearGradient(0, 0, 0, 120);
+  const grad = ctx.createLinearGradient(0, 0, 0, 160);
   grad.addColorStop(0, "rgba(10,12,18,0.85)");
   grad.addColorStop(1, "rgba(10,12,18,0)");
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, 120);
+  ctx.fillRect(0, 0, W, 160);
 
+  // Big score, top left
   ctx.textAlign = "left";
   ctx.fillStyle = "#fff";
-  ctx.font = "bold " + Math.round(22 * s) + "px sans-serif";
-  ctx.fillText(String(game.score).padStart(6, "0"), 14, 12 + 22 * s);
+  ctx.font = "bold " + Math.round(44 * s) + "px sans-serif";
+  ctx.fillText(String(game.score), 14, 10 + 44 * s);
   ctx.fillStyle = "#9aa3b5";
-  ctx.font = Math.round(11 * s) + "px sans-serif";
-  ctx.fillText("BEST " + game.best, 14, 12 + 22 * s + 16 * s);
+  ctx.font = Math.round(13 * s) + "px sans-serif";
+  ctx.fillText("BEST " + game.best, 14, 10 + 44 * s + 18 * s);
 
   ctx.textAlign = "center";
   ctx.fillStyle = "#ffd166";
@@ -709,18 +702,18 @@ function drawHUD() {
   ctx.font = Math.round(11 * s) + "px sans-serif";
   ctx.fillText("FRUIT " + Math.min(game.levelCount, STAGE_SIZE) + "/" + STAGE_SIZE, W / 2, 18 + 15 * s + 15 * s);
 
-  // Line speed, top right under the pause button
+  // Big line speed, top right under the pause button
   ctx.textAlign = "right";
   ctx.fillStyle = "#ffd166";
-  ctx.font = "bold " + Math.round(14 * s) + "px sans-serif";
-  ctx.fillText((game.beltSpeed / CUP_PITCH).toFixed(2), W - 14, 58 + 14 * s);
+  ctx.font = "bold " + Math.round(30 * s) + "px sans-serif";
+  ctx.fillText((game.beltSpeed / CUP_PITCH).toFixed(2), W - 14, 54 + 30 * s);
   ctx.fillStyle = "#9aa3b5";
-  ctx.font = Math.round(9 * s) + "px sans-serif";
-  ctx.fillText("CUPS/SEC", W - 14, 62 + 14 * s + 10 * s);
+  ctx.font = "bold " + Math.round(11 * s) + "px sans-serif";
+  ctx.fillText("CUPS/SEC", W - 14, 58 + 30 * s + 12 * s);
 
   for (let i = 0; i < 3; i++) {
     const x = 28 + i * 34;
-    const y = 30 + 38 * s + 12;
+    const y = 30 + 62 * s + 12;
     ctx.fillStyle = i < game.lives ? "#fffbe8" : "rgba(255,255,255,0.12)";
     ctx.strokeStyle = i < game.lives ? "#ccb" : "rgba(255,255,255,0.15)";
     ctx.lineWidth = 1.5;
@@ -734,13 +727,6 @@ function drawHUD() {
       ctx.textAlign = "center";
       ctx.fillText("PLU", x, y + 2.5);
     }
-  }
-
-  if (game.combo >= 3) {
-    ctx.fillStyle = "#ffd166";
-    ctx.font = "bold " + Math.round(14 * s) + "px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("COMBO x" + game.combo, W / 2, 70 + 14 * s);
   }
 
   if (game.state === "playing" || game.state === "paused") {

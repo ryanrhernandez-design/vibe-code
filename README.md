@@ -19,11 +19,11 @@ Open `index.html` in any modern browser — designed for phones in portrait.
   **multi-touch works**: two fruits at once means two thumbs.
 - Fruit rides in carrier cups; empty cups flow with the line just like a real
   sorter.
-- Tag fruit while it's inside the dashed window around the bridge — dead-center
-  hits earn an accuracy bonus, and consecutive tags build a combo.
-- **3 dead-center hits in a row = CRITICAL STRIKE**: double points on that tag
-  and one fruit off the stage total, with a suitably dramatic flash. The pips
-  under the bridge track your streak.
+- Tag fruit while it's inside the dashed window around the bridge.
+  **1 point per labeled fruit.**
+- **3 dead-center hits in a row = CRITICAL STRIKE**: worth 2 points and one
+  fruit off the stage total, with a suitably dramatic flash. The pips under
+  the bridge track your streak.
 - **One commodity at a time**: avocados (PLU 4046), apples (4131), oranges
   (4012), peaches (4044), in randomized order.
 - Every **15 fruits** the belt speeds up slightly. Every **30 fruits** the belt
