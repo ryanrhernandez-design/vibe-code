@@ -46,6 +46,14 @@ per-device id, and each finished run logs a private play entry under
 > rules for the `flh` node in the Firebase console:
 > `"flh": { "scores": { ".read": true, ".write": true }, "plays": { ".read": false, ".write": true } }`
 
+## Dev dashboard
+
+`admin.html` is the developer console (same as Nemo's adventure): shift counts,
+plays-per-day chart, most active players, and rename/delete controls for
+leaderboard entries. Reading the private play log and editing scores needs your
+Firebase database secret — it reuses the key already saved by the Nemo
+dashboard on the same browser.
+
 ## Ideas for future shifts
 
 - Label cassette reloads (limited stickers, reload mid-rush)
