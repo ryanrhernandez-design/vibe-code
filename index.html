@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1a1e28">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Fruit Labeling Hero</title>
 <style>
   :root {
@@ -18,22 +21,25 @@
     color: #eee;
     overflow: hidden;
     touch-action: manipulation;
+    -webkit-touch-callout: none;
   }
   #wrap {
     height: 100%;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 10px;
     padding: 8px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
   #game {
     background: #222836;
     border-radius: 10px;
     box-shadow: 0 10px 40px rgba(0,0,0,.5);
-    max-width: 100%;
-    max-height: calc(100% - 110px);
+    width: 100%;
+    max-width: min(100%, calc((100dvh - 130px) * 16 / 9));
     aspect-ratio: 16 / 9;
   }
   #controls {
@@ -41,6 +47,8 @@
     gap: 10px;
     flex-wrap: wrap;
     justify-content: center;
+    width: 100%;
+    max-width: 560px;
   }
   .label-btn {
     display: flex;
@@ -64,6 +72,12 @@
     border-color: var(--accent);
   }
   .label-btn .fruit { font-size: 24px; line-height: 1.1; }
+  @media (max-width: 640px) {
+    #controls { gap: 8px; flex-wrap: nowrap; }
+    .label-btn { flex: 1; min-width: 0; padding: 12px 4px; }
+    .label-btn .fruit { font-size: 30px; }
+    .label-btn .key { font-size: 9px; }
+  }
   .label-btn .plu {
     background: #fffbe8;
     color: #333;
@@ -89,6 +103,13 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
+
+// Text boost so HUD/messages stay readable when the canvas is shrunk on phones
+let uiBoost = 1;
+function updateUiBoost() {
+  const cw = canvas.clientWidth || W;
+  uiBoost = Math.min(1.6, Math.max(1, 620 / cw));
+}
 
 const BELT_Y = 392;          // top surface of the belt
 const LABELER_X = W / 2;     // x position of the labeling head
@@ -565,19 +586,20 @@ function drawLabeler() {
 }
 
 function drawHUD() {
+  const s = uiBoost;
   ctx.textAlign = "left";
   ctx.fillStyle = "#fff";
-  ctx.font = "bold 24px sans-serif";
-  ctx.fillText(String(game.score).padStart(6, "0"), 20, 38);
+  ctx.font = "bold " + Math.round(24 * s) + "px sans-serif";
+  ctx.fillText(String(game.score).padStart(6, "0"), 20, 14 + 24 * s);
   ctx.fillStyle = "#9aa3b5";
-  ctx.font = "12px sans-serif";
-  ctx.fillText("BEST " + game.best, 20, 56);
+  ctx.font = Math.round(12 * s) + "px sans-serif";
+  ctx.fillText("BEST " + game.best, 20, 14 + 24 * s + 18 * s);
 
-  ctx.fillText("LEVEL " + game.level, 20, 76);
+  ctx.fillText("LEVEL " + game.level, 20, 14 + 24 * s + 36 * s);
 
   // Lives as stickers
   for (let i = 0; i < 3; i++) {
-    const x = 200 + i * 36;
+    const x = 130 + 90 * s + i * 36;
     ctx.fillStyle = i < game.lives ? "#fffbe8" : "rgba(255,255,255,0.12)";
     ctx.strokeStyle = i < game.lives ? "#ccb" : "rgba(255,255,255,0.15)";
     ctx.beginPath();
@@ -595,9 +617,9 @@ function drawHUD() {
 
   if (game.combo >= 3) {
     ctx.fillStyle = "#ffd166";
-    ctx.font = "bold 16px sans-serif";
+    ctx.font = "bold " + Math.round(16 * s) + "px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("COMBO x" + game.combo, W / 2, 40);
+    ctx.fillText("COMBO x" + game.combo, W / 2, 24 + 16 * s);
   }
 }
 
@@ -611,7 +633,7 @@ function drawTextsAndParticles() {
   for (const t of game.texts) {
     ctx.globalAlpha = Math.max(0, Math.min(1, t.life * 2));
     ctx.fillStyle = t.color;
-    ctx.font = "bold " + t.size + "px sans-serif";
+    ctx.font = "bold " + Math.round(t.size * uiBoost) + "px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(t.str, t.x, t.y);
   }
@@ -624,41 +646,43 @@ function drawOverlay() {
   ctx.fillRect(0, 0, W, H);
   ctx.textAlign = "center";
 
+  const s = uiBoost;
   if (game.state === "menu") {
     ctx.fillStyle = "#ffd166";
-    ctx.font = "bold 52px sans-serif";
-    ctx.fillText("FRUIT LABELING HERO", W / 2, 170);
+    ctx.font = "bold " + Math.round(Math.min(52 * s, 66)) + "px sans-serif";
+    ctx.fillText("FRUIT LABELING HERO", W / 2, 140);
     ctx.fillStyle = "#fff";
-    ctx.font = "20px sans-serif";
-    ctx.fillText("Fruit is rolling down the line. Stick the RIGHT PLU label on every piece", W / 2, 230);
-    ctx.fillText("as it passes under the labeling head.", W / 2, 258);
+    ctx.font = Math.round(20 * s) + "px sans-serif";
+    ctx.fillText("Stick the RIGHT PLU label on every fruit", W / 2, 210);
+    ctx.fillText("as it passes under the labeling head.", W / 2, 210 + 30 * s);
     ctx.fillStyle = "#9aa3b5";
-    ctx.font = "16px sans-serif";
-    ctx.fillText("Keys 1–4 (or tap the buttons) fire each label  •  P pauses the line", W / 2, 310);
-    ctx.fillText("Wrong label or unlabeled fruit = lost sticker. Lose 3 and the shift is over.", W / 2, 336);
+    ctx.font = Math.round(16 * s) + "px sans-serif";
+    ctx.fillText("Tap the label buttons (or keys 1–4)", W / 2, 230 + 64 * s);
+    ctx.fillText("Wrong label or unlabeled fruit = strike.", W / 2, 230 + 90 * s);
+    ctx.fillText("Three strikes and the shift is over.", W / 2, 230 + 116 * s);
     ctx.fillStyle = "#7CFC9A";
-    ctx.font = "bold 24px sans-serif";
-    ctx.fillText(blink() ? "PRESS ANY LABEL KEY TO CLOCK IN" : "", W / 2, 410);
+    ctx.font = "bold " + Math.round(22 * s) + "px sans-serif";
+    ctx.fillText(blink() ? "TAP ANY LABEL TO CLOCK IN" : "", W / 2, 250 + 160 * s);
   } else if (game.state === "paused") {
     ctx.fillStyle = "#fff";
-    ctx.font = "bold 40px sans-serif";
+    ctx.font = "bold " + Math.round(40 * s) + "px sans-serif";
     ctx.fillText("LINE STOPPED", W / 2, H / 2 - 10);
     ctx.fillStyle = "#9aa3b5";
-    ctx.font = "18px sans-serif";
-    ctx.fillText("Press P to restart the conveyor", W / 2, H / 2 + 30);
+    ctx.font = Math.round(18 * s) + "px sans-serif";
+    ctx.fillText("Press P to restart the conveyor", W / 2, H / 2 + 22 + 18 * s);
   } else if (game.state === "gameover") {
     ctx.fillStyle = "#ff6b6b";
-    ctx.font = "bold 44px sans-serif";
-    ctx.fillText("SHIFT OVER", W / 2, 190);
+    ctx.font = "bold " + Math.round(44 * s) + "px sans-serif";
+    ctx.fillText("SHIFT OVER", W / 2, 170);
     ctx.fillStyle = "#fff";
-    ctx.font = "26px sans-serif";
-    ctx.fillText("Score: " + game.score, W / 2, 250);
+    ctx.font = Math.round(26 * s) + "px sans-serif";
+    ctx.fillText("Score: " + game.score, W / 2, 180 + 56 * s);
     ctx.fillStyle = game.score >= game.best && game.score > 0 ? "#ffd166" : "#9aa3b5";
-    ctx.font = "18px sans-serif";
-    ctx.fillText(game.score >= game.best && game.score > 0 ? "NEW PLANT RECORD!" : "Plant record: " + game.best, W / 2, 285);
+    ctx.font = Math.round(18 * s) + "px sans-serif";
+    ctx.fillText(game.score >= game.best && game.score > 0 ? "NEW PLANT RECORD!" : "Plant record: " + game.best, W / 2, 190 + 86 * s);
     ctx.fillStyle = "#7CFC9A";
-    ctx.font = "bold 22px sans-serif";
-    ctx.fillText(blink() ? "PRESS ANY LABEL KEY FOR NEXT SHIFT" : "", W / 2, 380);
+    ctx.font = "bold " + Math.round(20 * s) + "px sans-serif";
+    ctx.fillText(blink() ? "TAP ANY LABEL FOR NEXT SHIFT" : "", W / 2, 220 + 140 * s);
   }
 }
 
@@ -686,6 +710,7 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
+  updateUiBoost();
   update(dt);
   draw();
   requestAnimationFrame(frame);
