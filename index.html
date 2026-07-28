@@ -167,6 +167,34 @@ const COMMODITIES = [
   { id: "stone",   name: "PEACHES",  plu: "4044" },
 ];
 
+// Per-commodity color themes: the whole plant re-lights at every changeover
+const THEMES = {
+  avocado: { bg1: "#22301c", bg2: "#182310", rail: "#3d4d33", cup: "#2c3627", accent: "#9dc964", juice: "#6d8d44" },
+  apple:   { bg1: "#33201f", bg2: "#251313", rail: "#523a38", cup: "#382b2a", accent: "#f28282", juice: "#c23b35" },
+  citrus:  { bg1: "#332813", bg2: "#251b0a", rail: "#524526", cup: "#383122", accent: "#ffc76b", juice: "#e08a10" },
+  stone:   { bg1: "#321f27", bg2: "#241318", rail: "#503a44", cup: "#372a30", accent: "#ffadad", juice: "#e8737f" },
+};
+function hexRgb(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
+const themeCur = {};
+function setThemeInstant(id) {
+  for (const k in THEMES[id]) themeCur[k] = hexRgb(THEMES[id][k]);
+}
+function lerpTheme(dt) {
+  const t = THEMES[game.commodity.id];
+  const f = 1 - Math.exp(-dt * 2.5);
+  for (const k in t) {
+    const target = hexRgb(t[k]);
+    const cur = themeCur[k] || (themeCur[k] = target.slice());
+    for (let i = 0; i < 3; i++) cur[i] += (target[i] - cur[i]) * f;
+  }
+}
+function tc(k, a) {
+  const c = themeCur[k];
+  return a !== undefined ? `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})` : `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+}
+// phone vibration: a tiny thump on every stamp, a pattern on the big moments
+function buzz(p) { if (navigator.vibrate) try { navigator.vibrate(p); } catch (e) {} }
+
 // Text boost so HUD/messages stay readable when the canvas is shrunk on phones
 let uiBoost = 1;
 function updateUiBoost() {
@@ -197,6 +225,7 @@ const sfx = {
   whiff:    () => { beep(300, 0.06, "triangle", 0.08); },
   miss:     () => { beep(220, 0.15, "square", 0.12); beep(150, 0.25, "square", 0.12, 0.12); },
   speedup:  () => { beep(523, 0.1, "sine", 0.12); beep(784, 0.16, "sine", 0.12, 0.09); },
+  thud:     () => { beep(80, 0.2, "sine", 0.35); beep(45, 0.3, "sine", 0.25, 0.02); },
   changeover:() => { [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.12, "sine", 0.12, i * 0.09)); },
   gameover: () => { [392, 330, 262, 196].forEach((f, i) => beep(f, 0.25, "triangle", 0.15, i * 0.2)); },
 };
@@ -216,6 +245,9 @@ const game = {
   critTimer: 0,
   critX: 0,
   critY: 0,
+  slamT: 0,                   // commodity sticker slam animation (seconds left)
+  slamHit: false,
+  slowmo: 0,                  // crit slow-motion (seconds left)
   beltSpeed: START_CPS * CUP_PITCH,
   processed: 0,               // fruits past the labelers (labeled or missed)
   levelCount: 0,              // stage progress (crits add a bonus fruit)
@@ -258,7 +290,10 @@ function reset() {
   game.levelCount = 0;
   game.commodityQueue = [];
   game.commodity = pickCommodity();
+  setThemeInstant(game.commodity.id);
   game.shift = 1;
+  game.slamT = 0;
+  game.slowmo = 0;
   game.changeover = false;
   game.pattern = [];
   game.stampAnims = [0, 0, 0, 0];
@@ -336,6 +371,7 @@ function addBurst(x, y, color, n = 10) {
 }
 
 function loseLife(reason, x, y) {
+  buzz(60);
   game.lives--;
   game.perfectStreak = 0;
   game.shake = 8;
@@ -374,9 +410,9 @@ function completeChangeover() {
   game.shift++;
   game.commodity = pickCommodity();
   game.beltSpeed += CPS_PER_LEVEL * CUP_PITCH;
-  addText(W / 2, LABELER_Y - 240, "CHANGEOVER!", "#ffd166", 28);
-  addText(W / 2, LABELER_Y - 200, "NOW RUNNING: " + game.commodity.name + " · PLU " + game.commodity.plu, "#7CFC9A", 16);
-  addText(W / 2, LABELER_Y - 168, "LINE SPEED UP: " + (game.beltSpeed / CUP_PITCH).toFixed(1) + " CUPS/SEC", "#ffd166", 16);
+  game.slamT = 1.4;
+  game.slamHit = false;
+  addText(W / 2, LABELER_Y - 168, "LINE SPEED UP: " + (game.beltSpeed / CUP_PITCH).toFixed(2) + " CUPS/SEC", "#ffd166", 16);
   sfx.speedup();
   sfx.changeover();
 }
@@ -386,6 +422,7 @@ function tapLane(lane) {
   if (game.state !== "playing") return;
   game.stampAnims[lane] = 1;
   sfx.stamp();
+  buzz(12);
 
   let target = null, bestDist = Infinity;
   for (const fr of game.fruits) {
@@ -401,6 +438,8 @@ function tapLane(lane) {
   }
 
   target.labeled = true;
+  target.squash = 1;  // fruit compresses under the stamp
+  target.stickT = 1;  // sticker slaps on big and settles
   const accuracy = 1 - bestDist / (target.r + STAMP_WINDOW);
   let pts = 1; // simple scoring: one point per labeled fruit
 
@@ -419,17 +458,20 @@ function tapLane(lane) {
       addText(target.x, LABELER_Y - 70, "CRITICAL STRIKE!", "#ffd166", 26);
       addText(target.x, LABELER_Y - 38, "+2 · −1 FRUIT TO STAGE", "#7CFC9A", 15);
       addBurst(target.x, LABELER_Y, "#ffd166", 22);
+      addBurst(target.x, LABELER_Y, THEMES[target.type].juice, 16);
+      game.slowmo = 0.4; // savor it
+      buzz([30, 40, 70]);
       sfx.crit();
       bumpStage(1); // the bonus fruit
     } else {
       addText(target.x, LABELER_Y - 50, "DEAD CENTER +1", "#7CFC9A", 18);
-      addBurst(target.x, LABELER_Y, "#7CFC9A", 8);
+      addBurst(target.x, LABELER_Y, THEMES[target.type].juice, 14);
       sfx.perfect();
     }
   } else {
     game.perfectStreak = 0;
     addText(target.x, LABELER_Y - 50, "+1", "#7CFC9A", 17);
-    addBurst(target.x, LABELER_Y, "#7CFC9A", 6);
+    addBurst(target.x, LABELER_Y, THEMES[target.type].juice, 8);
     sfx.correct();
   }
 
@@ -443,6 +485,8 @@ function startGame() {
   reset();
   refreshRemoteLB(); // keep the global top-100 fresh between runs
   game.state = "playing";
+  game.slamT = 1.4; // slam the first commodity's sticker down
+  game.slamHit = false;
 }
 
 // ---------- Player name + Top 100 leaderboard (ported from Nemo's adventure) ----------
@@ -596,11 +640,28 @@ refreshRemoteLB();
 // ---------- Update ----------
 function update(dt) {
   game.time += dt;
-  game.fingerRot += dt * 2.2;
+  lerpTheme(dt);
+  // crit slow-motion: the world runs at 30% while the flash plays
+  let world = dt;
+  if (game.slowmo > 0) {
+    world = dt * 0.3;
+    game.slowmo = Math.max(0, game.slowmo - dt);
+  }
+  // commodity sticker slam: impact effects when it lands
+  if (game.slamT > 0) {
+    game.slamT = Math.max(0, game.slamT - dt);
+    if (!game.slamHit && game.slamT <= 1.15) {
+      game.slamHit = true;
+      game.shake = 10;
+      sfx.thud();
+      buzz(40);
+    }
+  }
+  game.fingerRot += world * 2.2;
   if (game.state === "paused" || game.state === "gameover") return;
 
   // Belt advance: cups always ride (idle speed on the menu)
-  const adv = (game.state === "playing" ? game.beltSpeed : 60) * dt;
+  const adv = (game.state === "playing" ? game.beltSpeed : 60) * world;
   for (const row of game.rows) row.y -= adv;
   for (let i = game.rows.length - 1; i >= 0; i--) {
     if (game.rows[i].y < -70) game.rows.splice(i, 1);
@@ -615,6 +676,8 @@ function update(dt) {
   for (const fr of game.fruits) {
     fr.y -= adv;
     fr.rot += adv / fr.r * 0.1;
+    if (fr.squash) fr.squash = Math.max(0, fr.squash - world * 5);
+    if (fr.stickT) fr.stickT = Math.max(0, fr.stickT - world * 6);
     // Passed the labeler unlabeled = missed
     if (!fr.labeled && !fr.missed && fr.y < LABELER_Y - fr.r - STAMP_WINDOW) {
       fr.missed = true;
@@ -628,21 +691,21 @@ function update(dt) {
   }
 
   // Animations
-  for (let l = 0; l < LANES; l++) game.stampAnims[l] = Math.max(0, game.stampAnims[l] - dt * 5);
+  for (let l = 0; l < LANES; l++) game.stampAnims[l] = Math.max(0, game.stampAnims[l] - world * 5);
   game.critTimer = Math.max(0, game.critTimer - dt * 1.4);
   game.shake = Math.max(0, game.shake - dt * 30);
   for (let i = game.texts.length - 1; i >= 0; i--) {
     const t = game.texts[i];
-    t.life -= dt * 0.6;
-    t.y -= dt * 26;
+    t.life -= world * 0.6;
+    t.y -= world * 26;
     if (t.life <= 0) game.texts.splice(i, 1);
   }
   for (let i = game.particles.length - 1; i >= 0; i--) {
     const p = game.particles[i];
-    p.life -= dt;
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.vy += 400 * dt;
+    p.life -= world;
+    p.x += p.vx * world;
+    p.y += p.vy * world;
+    p.vy += 400 * world;
     if (p.life <= 0) game.particles.splice(i, 1);
   }
 }
@@ -650,15 +713,15 @@ function update(dt) {
 // ---------- Drawing ----------
 function drawBelts() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "#262c38");
-  g.addColorStop(1, "#202531");
+  g.addColorStop(0, tc("bg1"));
+  g.addColorStop(1, tc("bg2"));
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
   // Lane rails
   for (let l = 0; l <= LANES; l++) {
     const x = l * LANE_W;
-    ctx.fillStyle = "#39404f";
+    ctx.fillStyle = tc("rail");
     ctx.fillRect(x - 4, 0, 8, H);
     ctx.fillStyle = "rgba(0,0,0,0.3)";
     ctx.fillRect(x + 2, 0, 2, H);
@@ -670,8 +733,8 @@ function drawCups() {
     for (let l = 0; l < LANES; l++) {
       const x = laneX(l), y = row.y;
       // Carrier tray
-      ctx.fillStyle = "#2c3340";
-      ctx.strokeStyle = "#454d60";
+      ctx.fillStyle = tc("cup");
+      ctx.strokeStyle = tc("rail");
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.roundRect(x - 48, y - 42, 96, 84, 14);
@@ -702,6 +765,7 @@ function drawFruitTop(fr) {
   ctx.fill();
 
   ctx.rotate(Math.sin(fr.rot) * 0.1);
+  if (fr.squash) ctx.scale(1 + fr.squash * 0.16, 1 - fr.squash * 0.22); // compressed under the stamp
 
   if (fr.type === "avocado") {
     const g = ctx.createRadialGradient(-fr.r * 0.3, -fr.r * 0.3, 4, 0, 0, fr.r * 1.2);
@@ -781,6 +845,7 @@ function drawFruitTop(fr) {
   if (fr.labeled) {
     ctx.save();
     ctx.rotate(-0.15);
+    if (fr.stickT) { const st = 1 + fr.stickT * 1.3; ctx.scale(st, st); } // slaps on big, settles
     ctx.fillStyle = "#fffbe8";
     ctx.strokeStyle = "#ccb";
     ctx.lineWidth = 1.5;
@@ -920,6 +985,57 @@ function drawCritFX() {
   // Full-screen gold flash
   ctx.fillStyle = "rgba(255,215,100," + (game.critTimer * 0.16) + ")";
   ctx.fillRect(0, 0, W, H);
+}
+
+// Speed vignette: the screen edges glow in the commodity color as the line gets fast
+function drawVignette() {
+  const a = Math.min(0.3, Math.max(0, (game.beltSpeed / CUP_PITCH - 1.5) * 0.09));
+  if (a <= 0.01) return;
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.7);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, tc("accent", a.toFixed(3)));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// Commodity changeover: a giant PLU sticker slams down onto the screen
+function drawSlam() {
+  if (game.slamT <= 0) return;
+  const p = 1.4 - game.slamT;             // elapsed
+  const drop = Math.max(0, 1 - p / 0.25); // 1 -> 0 while falling in
+  const sc = 1 + drop * drop * 2.4;
+  const alpha = Math.min(1, game.slamT / 0.3);
+  const rot = -0.1 + 0.1 * Math.min(1, p / 0.4);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(W / 2, H * 0.42);
+  ctx.rotate(rot);
+  ctx.scale(sc, sc);
+  ctx.fillStyle = "#fffbe8";
+  ctx.strokeStyle = tc("accent");
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 170, 100, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#2b2410";
+  ctx.textAlign = "center";
+  ctx.font = "bold 40px sans-serif";
+  ctx.fillText(game.commodity.name, 0, -8);
+  ctx.font = "bold 30px sans-serif";
+  ctx.fillText("PLU " + game.commodity.plu, 0, 34);
+  let bx = -60; // a little barcode, because every real sticker has one
+  for (let i = 0; bx < 60; i++) {
+    const w = (i * 7 % 5) + 1;
+    ctx.fillRect(bx, 52, w, 16);
+    bx += w + 3;
+  }
+  ctx.restore();
+  if (p > 0.22 && p < 0.35) { // impact flash
+    ctx.fillStyle = "rgba(255,255,255," + (0.25 * (1 - (p - 0.22) / 0.13)).toFixed(3) + ")";
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.globalAlpha = 1;
 }
 
 const PAUSE_BTN = { x: W - 50, y: 10, w: 40, h: 40 };
@@ -1083,7 +1199,9 @@ function draw() {
   drawLabelers();
   drawTextsAndParticles();
   drawCritFX();
+  drawVignette();
   drawHUD();
+  drawSlam();
   ctx.restore();
   drawOverlay();
 }
