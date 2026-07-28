@@ -26,7 +26,7 @@ Open `index.html` in any modern browser — designed for phones in portrait.
   the bridge track your streak.
 - **One commodity at a time**: avocados (PLU 4046), apples (4131), oranges
   (4012), peaches (4044), in randomized order.
-- The line starts at **1.5 cups/second** and gains **+1.0 cups/second at every
+- The line starts at **1.5 cups/second** and gains **+0.25 cups/second at every
   changeover**. Every **30 fruits** the belt drains and the line changes over
   to the next commodity.
 - Lane spawn patterns randomize every run, with simultaneous doubles showing up
