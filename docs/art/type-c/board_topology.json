@@ -1,0 +1,8 @@
+{
+  "columns": 7,
+  "rows": 8,
+  "splitAfterRow": 4,
+  "benchSlotsPerSide": 8,
+  "worldTileShape": "square",
+  "coordinates": "diagram labels only; engine coordinate convention not specified"
+}

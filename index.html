@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#F7F0E4" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Crowns &amp; Tiles</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- ── Match ── -->
+      <section id="match" class="match" hidden>
+        <header class="hdr">
+          <button id="btn-menu" class="icon-btn" aria-label="Match menu"></button>
+          <div class="phase" aria-live="polite">
+            <small id="round-label">Round 1</small>
+            <div class="phase-line"><b id="phase-label">Prep</b> <span id="timer" class="timer">0:30</span></div>
+          </div>
+          <div class="hp" aria-label="Your health"><span id="hp-icon"></span><b id="hp">100</b></div>
+        </header>
+
+        <nav id="players" class="players" aria-label="Players (tap to view a board)"></nav>
+
+        <main id="stage" class="stage">
+          <div id="stage-art" class="stage-art" aria-hidden="true"></div>
+          <canvas id="board" aria-label="Game board"></canvas>
+          <div id="overlay" class="overlay" aria-hidden="true"></div>
+          <div id="scout-banner" class="scout-banner" hidden>
+            <span>Viewing <b id="scout-name"></b></span>
+            <button id="scout-back" class="pill-btn">Return</button>
+          </div>
+          <button id="btn-ready" class="ready-btn">Ready</button>
+          <div id="banner" class="banner" hidden></div>
+          <div id="toast" class="toast" role="status" hidden></div>
+        </main>
+
+        <div id="synergies" class="synergies" aria-label="Synergies"></div>
+        <section id="bench" class="bench" aria-label="Bench"></section>
+
+        <section id="dock" class="dock">
+          <div class="econ">
+            <div class="gold" aria-label="Gold"><span id="gold-icon"></span><b id="gold">0</b><small id="interest" title="Interest next round">+0</small></div>
+            <button id="btn-level" class="level" aria-label="Level, XP and shop odds">
+              <span class="lv">Lv <b id="level">1</b></span>
+              <span class="xpbar"><i id="xpfill"></i></span>
+              <small id="cap">0/1</small>
+            </button>
+            <button id="btn-xp" class="act secondary" aria-label="Buy XP"></button>
+            <button id="btn-reroll" class="act primary" aria-label="Reroll shop"></button>
+            <button id="btn-lock" class="act secondary" aria-label="Lock shop"></button>
+          </div>
+          <div id="cards" class="cards"></div>
+          <div class="sell-zone" aria-hidden="true"><span id="sell-icon"></span> Release to sell for <b id="sell-value">0</b></div>
+        </section>
+
+        <section id="combat-dock" class="combat-dock" hidden></section>
+      </section>
+
+      <!-- ── Front end ── -->
+      <section id="front" class="front">
+        <div id="front-page" class="front-page"></div>
+        <nav id="tabs" class="tabs" aria-label="Main"></nav>
+      </section>
+
+      <div id="screen" class="screen" hidden></div>
+      <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+      <div id="sheet" class="sheet" role="dialog" aria-modal="true" hidden></div>
+      <div id="drag-ghost" class="drag-ghost" hidden></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

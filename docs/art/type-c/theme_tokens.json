@@ -1,0 +1,127 @@
+{
+  "meta": {
+    "name": "Type C - Collectible Figurine",
+    "version": "1.0",
+    "status": "proposed tokens derived from selected concept; not sampled production materials"
+  },
+  "colors": {
+    "canvas": "#F7F0E4",
+    "surface": "#FFF9EF",
+    "surfaceRecessed": "#E8D9BF",
+    "ink": "#30271F",
+    "mutedInk": "#665746",
+    "border": "#C4AD87",
+    "gold": "#C89B46",
+    "goldDark": "#745018",
+    "teal": "#22666D",
+    "danger": "#A83C38",
+    "success": "#356647",
+    "xp": "#315E91",
+    "focus": "#174F7A"
+  },
+  "factions": {
+    "sunforged": {
+      "name": "Sunforged Dominion",
+      "colors": [
+        "#F5EAD2",
+        "#C89B46",
+        "#F49A38",
+        "#6A4930"
+      ]
+    },
+    "tidebound": {
+      "name": "Tidebound Covenant",
+      "colors": [
+        "#183747",
+        "#2A777B",
+        "#B38B50",
+        "#65DCE7"
+      ]
+    },
+    "wildroot": {
+      "name": "Wildroot Clans",
+      "colors": [
+        "#56734B",
+        "#76503A",
+        "#EEE0BC",
+        "#D89B3C"
+      ]
+    }
+  },
+  "tiers": {
+    "1": "#77746C",
+    "2": "#3D7751",
+    "3": "#356CB0",
+    "4": "#8754A2",
+    "5": "#BA862C"
+  },
+  "spacing": [
+    4,
+    8,
+    12,
+    16,
+    24,
+    32
+  ],
+  "radii": {
+    "small": 8,
+    "card": 12,
+    "panel": 20,
+    "pill": 999
+  },
+  "type": {
+    "display": "Georgia, serif",
+    "interface": "system-ui, sans-serif",
+    "bodyPx": 14,
+    "labelPx": 12,
+    "numberPx": 20,
+    "headingPx": 28
+  },
+  "motionMs": {
+    "press": 100,
+    "panel": 200,
+    "purchase": 220,
+    "reroll": 180,
+    "merge": 600,
+    "levelUp": 550,
+    "reducedMotion": 0
+  },
+  "materials": {
+    "ivoryCeramic": {
+      "metallic": 0,
+      "roughness": [
+        0.32,
+        0.48
+      ]
+    },
+    "goldTrim": {
+      "metallic": 1,
+      "roughness": [
+        0.22,
+        0.38
+      ]
+    },
+    "paintedVinyl": {
+      "metallic": 0,
+      "roughness": [
+        0.28,
+        0.45
+      ]
+    },
+    "sculptedCloth": {
+      "metallic": 0,
+      "roughness": [
+        0.65,
+        0.85
+      ]
+    },
+    "barkAndFur": {
+      "metallic": 0,
+      "roughness": [
+        0.55,
+        0.8
+      ]
+    }
+  },
+  "materialNote": "Starting art targets only. Tune in the chosen renderer under neutral lighting. Do not assume channel packing or shader parity between engines."
+}

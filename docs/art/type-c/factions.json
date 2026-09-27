@@ -1,0 +1,35 @@
+{
+  "sunforged": {
+    "name": "Sunforged Dominion",
+    "palette": [
+      "#F5EAD2",
+      "#C89B46",
+      "#F49A38",
+      "#6A4930"
+    ],
+    "motif": "solar rays, cathedral arches, ivory enamel, polished warm gold",
+    "material": "Ivory ceramic armor, polished gold trim, sculpted cream fabric, opaque amber gems"
+  },
+  "tidebound": {
+    "name": "Tidebound Covenant",
+    "palette": [
+      "#183747",
+      "#2A777B",
+      "#B38B50",
+      "#65DCE7"
+    ],
+    "motif": "shell plates, coral, rope, portholes, nautical curves",
+    "material": "Teal enamel shell, matte navy coat, satin brass, opaque cyan glass"
+  },
+  "wildroot": {
+    "name": "Wildroot Clans",
+    "palette": [
+      "#56734B",
+      "#76503A",
+      "#EEE0BC",
+      "#D89B3C"
+    ],
+    "motif": "rounded bark, leaves, antlers, amber, mushrooms",
+    "material": "Matte sculpted bark and fur, soft moss shapes, smooth bone ceramic, amber resin"
+  }
+}
