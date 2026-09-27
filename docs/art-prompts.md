@@ -1,8 +1,8 @@
 # Art Generation Prompts
 
-Prompts for generating concept art and 3D-ready references for the game's first 3 character factions and 3 boards. The target is high-fidelity, stylized Unity (URP) graphics that stay readable on a phone screen.
+Prompts for generating concept art and 3D-ready references for the game's first 3 character factions and 3 boards. The target is high-fidelity Unity (URP) graphics that stay readable on a phone screen.
 
-All three factions share one **master style block**, so the units look like they belong in the same game. Each faction has its own color palette and design motifs, so players can tell factions apart at a glance.
+There are **3 art styles** (A, B, C). Each one can be applied to every faction and every board, so you can generate the same unit or board in all three styles and compare them side by side before committing to one look for the whole game. Each faction keeps its own color palette and design motifs in every style, so players can tell factions apart at a glance.
 
 All names, characters and settings here are original. Do not add references to Dota, Valve or any other existing franchise.
 
@@ -10,29 +10,86 @@ All names, characters and settings here are original. Do not add references to D
 
 ## How to use these
 
-1. **Concept image:** paste the master style block, then the character prompt, into an image generator (Midjourney, GPT Image, Flux, etc.). Add the negative prompt if the tool supports one.
-2. **Turnaround:** add the turnaround suffix to get front, side and back views. 3D generators and artists both need these.
-3. **3D model:** feed the front view (or the turnaround) into an image-to-3D tool (Meshy, Tripo, Rodin/Hyper3D) or give it to a 3D artist, using the Unity specs at the bottom of this file.
-4. **Readability check:** shrink each concept to about 80 px tall. That is roughly the size of a unit on a phone. If you can no longer tell its role (tank, archer, caster), simplify the silhouette.
+Prompts are built from interchangeable pieces:
 
-Optional Midjourney parameters: `--ar 1:1 --style raw --v 7` (single view) or `--ar 16:9` (turnaround).
+- **Character:** `[Style X character block]` + `[character prompt]`, optionally + `[turnaround suffix]`
+- **Board:** `[Style X board block]` + `[board layout block]` + `[board theme prompt]`
+- **Negative prompt:** `[shared negative]` + `[Style X negative additions]`, if the tool supports one
+
+Steps:
+
+1. **Compare styles first:** generate the same few test pieces in all three styles, for example the tier-1 tank from each faction plus one board. That is 12 images. Compare them on your phone before generating everything.
+2. **Concept image:** paste the combined prompt into an image generator (Midjourney, GPT Image, Flux, etc.).
+3. **Turnaround:** add the turnaround suffix to get front, side and back views. 3D generators and artists both need these.
+4. **3D model:** feed the front view (or the turnaround) into an image-to-3D tool (Meshy, Tripo, Rodin/Hyper3D) or give it to a 3D artist, using the Unity specs at the bottom of this file.
+5. **Readability check:** shrink each concept to about 80 px tall. That is roughly the size of a unit on a phone. If you can no longer tell its role (tank, archer, caster), simplify the silhouette.
+
+Optional Midjourney parameters: `--ar 1:1 --style raw --v 7` (single view) or `--ar 16:9` (turnaround). Adding `--sref` with a reference image you like keeps a style consistent across all units.
 
 ---
 
-## Master character style block (put this before every character prompt)
+## Art styles
 
+### Style A: Painted Heroic
+
+A bold, hand-painted look, as if a fantasy illustration were brought to life in 3D. It is chunky and readable, with visible brush-stroke texture and exaggerated heroic proportions. This is the safest pick for phones: strong silhouettes, and it hides low polygon counts well.
+
+**Character block:**
 ```
-Stylized high-fidelity 3D game character for a premium mobile strategy game, hand-painted PBR textures with crisp material separation (polished metal, worn leather, heavy cloth, skin, gemstones), chunky readable silhouette with slightly exaggerated heroic proportions (large hands, feet and weapons, about 1:5 head-to-body ratio), bold primary shapes with small secondary detail, soft studio three-point lighting with a subtle rim light, full body, centered, neutral mid-grey seamless background, A-pose, front view, orthographic camera, game-ready asset, Unity URP render quality
+Stylized high-fidelity 3D game character for a premium mobile strategy game, hand-painted textures with visible painterly brush strokes and baked color gradients, crisp material separation (polished metal, worn leather, heavy cloth, skin, gemstones), chunky readable silhouette with exaggerated heroic proportions (large hands, feet, shoulders and weapons, about 1:5 head-to-body ratio), bold primary shapes with small secondary detail, saturated but harmonious colors, soft studio three-point lighting with a warm rim light, full body, centered, neutral mid-grey seamless background, A-pose, front view, orthographic camera, game-ready asset, Unity URP render quality
 ```
+
+**Board block:**
+```
+Art style: hand-painted stylized 3D, visible painterly brush strokes on every surface, bold simplified shapes, saturated harmonious colors, soft painted light and shadow gradients, warm rim lighting, storybook fantasy illustration brought to life in 3D.
+```
+
+**Negative additions:** `photorealistic, gritty realism, plastic toy look, flat vector art`
+
+### Style B: Grounded Dark Fantasy
+
+A semi-realistic, cinematic look: realistic proportions, detailed physically based (PBR) materials such as scratched steel, worn fabric and wet surfaces, and moody, contrasty lighting. It feels the most premium and "console-like". It is the hardest to keep readable on a small screen, so it depends on strong faction colors and glowing accents.
+
+**Character block:**
+```
+Semi-realistic high-fidelity 3D game character for a premium mobile strategy game, detailed physically based materials (scratched forged steel, worn stitched leather, heavy woven fabric, realistic skin with subtle pores, cut gemstones), realistic heroic proportions (about 1:7 head-to-body ratio) with a slightly oversized weapon and armor for readability, strong clear silhouette, glowing emissive accents in the faction color, cinematic studio lighting with a strong cool rim light and soft key light, full body, centered, dark neutral grey seamless background, A-pose, front view, orthographic camera, game-ready asset, Unity URP high quality render
+```
+
+**Board block:**
+```
+Art style: semi-realistic dark fantasy 3D, detailed physically based materials with realistic wear, weathering and grime, grounded realistic proportions, moody cinematic lighting with strong contrast, volumetric light shafts and atmospheric haze in the background, glowing emissive accents, premium console-quality fantasy environment.
+```
+
+**Negative additions:** `cartoon, chibi, cel shading, oversized heads, toy-like, flat colors`
+
+### Style C: Collectible Figurine
+
+Premium designer-toy figurines: big heads, small bodies, soft rounded shapes, and clean sculpted materials such as glossy painted vinyl, matte ceramic and polished metal. Boards look like handcrafted tabletop playsets. This is the most readable and charming style on a phone, and the most distinctive against other auto battlers.
+
+**Character block:**
+```
+Stylized high-fidelity 3D collectible figurine character for a premium mobile strategy game, designer vinyl toy aesthetic, cute but heroic chibi proportions (about 1:2.5 head-to-body ratio, big expressive head, compact body, oversized weapon), soft rounded sculpted shapes, clean smooth materials (glossy painted vinyl, matte ceramic, polished enamel metal, soft fabric), simple clear color blocking, very readable silhouette, soft diffused studio lighting with gentle ambient occlusion and a soft rim light, full body, standing on a small round display base, centered, light neutral grey seamless background, A-pose, front view, orthographic camera, game-ready asset, Unity URP render quality
+```
+
+**Board block:**
+```
+Art style: handcrafted miniature tabletop playset, looks like a premium collectible toy diorama, soft rounded sculpted shapes, clean smooth materials (painted resin, matte ceramic, glossy enamel, felt), simple clear color blocking, soft diffused lighting with gentle ambient occlusion, subtle tilt-shift miniature depth of field in the background.
+```
+
+**Negative additions:** `photorealistic, gritty, grimy, realistic proportions, horror, sharp noisy detail`
+
+---
+
+## Shared prompt pieces
 
 **Turnaround suffix (add this at the end for 3D reference):**
 ```
 , character turnaround sheet, front view, side view and back view side by side, same A-pose in every view, consistent proportions, flat even lighting
 ```
 
-**Negative prompt:**
+**Shared negative prompt (for characters):**
 ```
-text, watermark, logo, background scenery, cropped limbs, dynamic action pose, motion blur, extra fingers, fused limbs, weapon clipping through body, photorealistic, anime cel shading, low detail, blurry, noisy textures
+text, watermark, logo, background scenery, cropped limbs, dynamic action pose, motion blur, extra fingers, fused limbs, weapon clipping through body, low detail, blurry, noisy textures
 ```
 
 ---
@@ -149,15 +206,15 @@ In Unity, these are usually the same mesh with swapped materials and effects add
 
 ## Board prompts
 
-All three boards share this **layout and gameplay block**. Put it before each board's theme prompt:
+Each board prompt is `[Style X board block]` + the **layout and gameplay block** below + the board's theme prompt:
 
 ```
-High-fidelity stylized 3D game board diorama for a premium mobile auto-battler strategy game, viewed from a fixed 3/4 top-down camera at about 55 degrees, portrait orientation 9:16, a clearly readable grid of square tiles 7 columns wide and 8 rows deep with a visible center line splitting it into two 4-row halves, a bench row of 8 slots along the near edge and another along the far edge, the playable grid is flat, evenly lit and uncluttered, all scenery and decoration pushed to the borders and background, hand-painted PBR textures, soft baked global illumination, gentle depth of field on the far background only, Unity URP render quality, no characters, no UI, no text
+High-fidelity 3D game board diorama for a premium mobile auto-battler strategy game, viewed from a fixed 3/4 top-down camera at about 55 degrees, portrait orientation 9:16, a clearly readable grid of square tiles 7 columns wide and 8 rows deep with a visible center line splitting it into two 4-row halves, a bench row of 8 slots along the near edge and another along the far edge, the playable grid is flat, evenly lit and uncluttered, all scenery and decoration pushed to the borders and background, soft baked global illumination, gentle depth of field on the far background only, Unity URP render quality, no characters, no UI, no text
 ```
 
-**Negative prompt:**
+**Shared negative prompt (for boards), plus the chosen style's negative additions:**
 ```
-characters, units, UI, text, watermark, clutter on the grid, uneven tiles, harsh shadows across the grid, fisheye distortion, photorealistic, blurry
+characters, units, UI, text, watermark, clutter on the grid, uneven tiles, harsh shadows across the grid, fisheye distortion, blurry
 ```
 
 ### Board 1: Sunlit Sanctum
@@ -197,3 +254,8 @@ Theme: an arena built on the flat top of a colossal ancient tree stump in a deep
 - Baked lighting (lightmaps and light probes). Only characters and effects should use real-time lights.
 - Tile states (hover, valid placement, invalid placement) are emissive decals or shader parameters, not separate meshes.
 - Keep the grid area higher in contrast and lower in detail than the borders, so units always read clearly on top of it.
+
+**Notes for each style**
+- **Style A (Painted Heroic):** most of the look lives in the albedo (color) texture, with light normal maps. Use the lower end of the triangle budget; this style is the cheapest to run on phones.
+- **Style B (Grounded Dark Fantasy):** needs full PBR maps and good normal maps, so author textures at 2048 and consider shipping 2048 on high-end phones only. Add an emissive map for the faction-colored glow, which keeps units readable against the darker boards. Use the upper end of the triangle budget.
+- **Style C (Collectible Figurine):** needs simple textures (mostly flat color plus a smoothness map), so 512–1024 is enough. The look comes from smooth geometry and the lighting, so budget polygons for rounded silhouettes. The round display base in the concepts can become the unit's in-game base, which doubles as a team-color ring.
