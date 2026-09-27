@@ -1,0 +1,135 @@
+[
+  {
+    "id": "01",
+    "name": "Splash / loading",
+    "description": "A small faction-neutral collectible plinth and a single progress indicator. Show useful loading state, then a short gameplay tip; avoid mandatory cinematic delays.",
+    "states": "Loading; ready; offline; asset retry.",
+    "actions": "Retry connection; continue to Home when ready."
+  },
+  {
+    "id": "02",
+    "name": "Home",
+    "description": "One hero figurine, one dominant Play action, mode summary and a quiet Practice link. Bottom navigation: Home, Collection, Progress, Profile. Settings moves to a clearly labeled top utility button.",
+    "states": "First visit; returning player; offline; optional progress unavailable.",
+    "actions": "Play; select mode; browse collection; settings."
+  },
+  {
+    "id": "03",
+    "name": "Mode select",
+    "description": "Large tactile cards for Standard and Practice. Quick/Turbo is a conditional card shown only when its rules exist. Explain expected duration using approved game data.",
+    "states": "Available; selected; unavailable; offline restriction.",
+    "actions": "Choose mode; confirm; back."
+  },
+  {
+    "id": "04",
+    "name": "Matchmaking / lobby",
+    "description": "Eight stable player slots, clear searching status, connection feedback and a visible cancel control. Do not invent a countdown until the server supplies one.",
+    "states": "Searching; filling; ready; canceled; connection lost.",
+    "actions": "Cancel before commitment; reconnect if interrupted."
+  },
+  {
+    "id": "05",
+    "name": "Collection / codex",
+    "description": "A premium figurine catalog: two-column cards, search, faction and role filters, sorting by cost or name. Each card displays exact source name, cost tier and faction/role marks. Codex membership does not imply ownership or paid unlocks.",
+    "states": "All units; filtered; search empty; unit detail; synergy reference.",
+    "actions": "Filter; inspect; reset search."
+  },
+  {
+    "id": "06",
+    "name": "Profile and ranks",
+    "description": "Avatar, display name, match history and placement distribution. Rank is a reserved module, shown only if the ranked system exists. No invented rank rewards.",
+    "states": "New profile; populated history; rank unavailable; history unavailable.",
+    "actions": "View match summary; edit supported profile fields."
+  },
+  {
+    "id": "07",
+    "name": "Settings",
+    "description": "Grouped controls for graphics, audio, haptics, reduce motion, color assistance, text size and language. Each setting gets a plain explanation. Unsupported haptics are omitted or clearly unavailable.",
+    "states": "Default; changed; unavailable capability; restore defaults.",
+    "actions": "Adjust; preview; restore defaults."
+  },
+  {
+    "id": "08",
+    "name": "First-time tutorial",
+    "description": "One instruction at a time over the real board, starting with buying, then placing, merging and reading a synergy. Focus one region without hiding relevant targets. Practice tutorial may pause; live matches must not.",
+    "states": "Buy step; place step; merge step; synergy step; skipped; completed.",
+    "actions": "Do the action; next; skip; replay from Settings."
+  },
+  {
+    "id": "09",
+    "name": "Preparation HUD",
+    "description": "Board-first layout with visible five-card shop, all eight bench slots, gold/interest, level/XP, unit cap, reroll and lock. Thin faction chips sit below the board. Keep controls anchored between phases.",
+    "states": "Normal; unaffordable; merge-ready; full bench; over-cap; locked shop; last five seconds.",
+    "actions": "Buy; reroll; buy XP; lock; place; sell; inspect; scout."
+  },
+  {
+    "id": "10",
+    "name": "Combat HUD",
+    "description": "Preserve board position. Replace the shopping dock with compact damage contribution bars and opponent context. Read-only bench remains available. No false pause or active purchase controls if combat shopping is disabled.",
+    "states": "Fighting; round ending; win; loss; draw; spectating.",
+    "actions": "Inspect units; expand combat stats; inspect opponents."
+  },
+  {
+    "id": "11",
+    "name": "Scouting",
+    "description": "Same camera framing and unit scale as the player board. A persistent Viewing banner and reachable Return button prevent accidental self-board actions. The shop is visible but dimmed and inactive in this proposed flow.",
+    "states": "Opponent selected; eliminated board; next opponent; return to own board.",
+    "actions": "Choose player; inspect; return."
+  },
+  {
+    "id": "12",
+    "name": "Unit inspect sheet",
+    "description": "A dismissible porcelain bottom sheet with full name, faction, role, cost tier, explicit star count, portrait, stats and ability. Synergies and equipment follow. The next-star preview is informational, not an upgrade purchase.",
+    "states": "Owned; shop; opponent; upgrade preview; no equipment system.",
+    "actions": "Close; switch details tab; preview star state."
+  },
+  {
+    "id": "13",
+    "name": "Synergy details",
+    "description": "Current count and next threshold lead. Show each threshold and its exact bonus from game data, plus qualifying unit portraits. Distinguish owned, fielded and not owned by labels and shapes.",
+    "states": "Inactive; partial; active; maximum; unit absent.",
+    "actions": "Inspect a qualifying unit; close."
+  },
+  {
+    "id": "14",
+    "name": "Item tray and detail",
+    "description": "Conditional module. A small item-count button opens a horizontal tray; tap-select then tap a unit is an alternative to dragging. Detail sheet states allowed targets and consequences. Recipes appear only if confirmed.",
+    "states": "Empty; item selected; valid target; invalid target; equipped; recipes disabled.",
+    "actions": "Inspect; equip; cancel target selection."
+  },
+  {
+    "id": "15",
+    "name": "Loot / pick one of three",
+    "description": "Three clear choices with inspect access, timer and a selected preview. Use explicit Confirm for a timed irreversible choice. On timeout display the actual game-resolved selection. Commander choice remains conditional.",
+    "states": "Choosing; inspecting; selection pending; confirmed; timed out.",
+    "actions": "Inspect; select; confirm."
+  },
+  {
+    "id": "16",
+    "name": "Round result",
+    "description": "Short nonblocking result banner, player damage explanation and clear health change. Keep the board readable and reveal the next phase without a dismissal requirement.",
+    "states": "Win; loss; draw; damage pending; next prep.",
+    "actions": "Expand breakdown; continue naturally."
+  },
+  {
+    "id": "17",
+    "name": "Eliminated / victory",
+    "description": "Placement and outcome take priority, followed by a final-lineup preview. Eliminated players can spectate or return home; victory celebrates with restrained faction particles. Do not claim rewards unless supplied.",
+    "states": "Eliminated; winner; waiting for final standings.",
+    "actions": "Spectate; summary; home."
+  },
+  {
+    "id": "18",
+    "name": "Post-match summary",
+    "description": "Placement, final board, synergies, round history and damage statistics. Show all final boards with stable player labels. Play Again is the primary action; Home is secondary. Rewards section is conditional.",
+    "states": "Winner; other placements; data pending; full summary; replay unavailable.",
+    "actions": "Play Again; inspect final boards; home."
+  },
+  {
+    "id": "19",
+    "name": "Leave / reconnect",
+    "description": "A leave confirmation must explain the real consequence. Online matches continue; the UI never promises pause. Reconnect uses a quiet persistent status banner and clearly restores the current round and health on return.",
+    "states": "Leave confirmation; reconnecting; restored; timed out; match ended while away.",
+    "actions": "Stay; leave; retry; view final summary."
+  }
+]

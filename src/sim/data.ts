@@ -105,28 +105,29 @@ export interface SynergyDef {
 }
 
 export const SYNERGIES: SynergyDef[] = [
-  { id: 'sun', name: 'Sunforged', kind: 'faction', icon: '☀', color: '#f2c14e', thresholds: [2, 4, 6],
+  { id: 'sun', name: 'Sunforged', kind: 'faction', icon: '☀', color: '#C89B46', thresholds: [2, 4, 6],
     summary: 'Sunforged units regenerate health every second.', bonus: ['2% max health / sec', '4% max health / sec', '7% max health / sec'] },
-  { id: 'tide', name: 'Tidebound', kind: 'faction', icon: '🌊', color: '#22b8c7', thresholds: [2, 4, 6],
+  { id: 'tide', name: 'Tidebound', kind: 'faction', icon: '🌊', color: '#2A777B', thresholds: [2, 4, 6],
     summary: 'Tidebound units gain extra mana on every attack.', bonus: ['+8 mana per attack', '+16 mana per attack', '+30 mana per attack'] },
-  { id: 'wild', name: 'Wildroot', kind: 'faction', icon: '🌿', color: '#6fa84a', thresholds: [2, 4, 6],
+  { id: 'wild', name: 'Wildroot', kind: 'faction', icon: '🌿', color: '#56734B', thresholds: [2, 4, 6],
     summary: 'Wildroot units gain bonus max health.', bonus: ['+15% max health', '+30% max health', '+55% max health'] },
-  { id: 'guardian', name: 'Guardian', kind: 'role', icon: '🛡', color: '#9aa7b8', thresholds: [2, 4],
+  { id: 'guardian', name: 'Guardian', kind: 'role', icon: '🛡', color: '#6B7A8A', thresholds: [2, 4],
     summary: 'All allies gain armor.', bonus: ['+20 armor', '+45 armor'] },
-  { id: 'striker', name: 'Striker', kind: 'role', icon: '⚔', color: '#e0664f', thresholds: [2, 4],
+  { id: 'striker', name: 'Striker', kind: 'role', icon: '⚔', color: '#B5553C', thresholds: [2, 4],
     summary: 'Strikers deal bonus attack damage.', bonus: ['+25% attack damage', '+60% attack damage'] },
-  { id: 'marksman', name: 'Marksman', kind: 'role', icon: '🏹', color: '#c9a14a', thresholds: [2, 4],
+  { id: 'marksman', name: 'Marksman', kind: 'role', icon: '🏹', color: '#9C7A2E', thresholds: [2, 4],
     summary: 'Marksmen attack faster.', bonus: ['+30% attack speed', '+70% attack speed'] },
-  { id: 'mystic', name: 'Mystic', kind: 'role', icon: '✦', color: '#a67cf0', thresholds: [2, 4],
+  { id: 'mystic', name: 'Mystic', kind: 'role', icon: '✦', color: '#7A5AA8', thresholds: [2, 4],
     summary: "All allies' abilities are stronger.", bonus: ['+25% ability power', '+60% ability power'] },
 ];
 
 export const SYNERGY_BY_ID = Object.fromEntries(SYNERGIES.map((s) => [s.id, s])) as Record<SynergyId, SynergyDef>;
 
+/** Faction colors from the Type C art direction (main body, trim, glow accent). */
 export const FACTION_COLORS: Record<FactionId, { primary: string; secondary: string; glow: string }> = {
-  sun: { primary: '#f4efe3', secondary: '#d4a62a', glow: '#ffb347' },
-  tide: { primary: '#1f4f6e', secondary: '#b08d57', glow: '#39e0f0' },
-  wild: { primary: '#5e8a3a', secondary: '#7a5230', glow: '#ffb52e' },
+  sun: { primary: '#F5EAD2', secondary: '#C89B46', glow: '#F49A38' },
+  tide: { primary: '#2A777B', secondary: '#B38B50', glow: '#65DCE7' },
+  wild: { primary: '#56734B', secondary: '#76503A', glow: '#D89B3C' },
 };
 
 // ── Tuning ──

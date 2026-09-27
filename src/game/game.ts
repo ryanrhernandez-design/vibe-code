@@ -1,94 +1,89 @@
 // Game controller: runs the round loop and connects the sim, the 3D board and the HUD.
 
 import { TICK, type Combat } from '../sim/combat';
-import { UNIT_BY_ID, sellValue } from '../sim/data';
-import { Match, type Loc, type Pairing } from '../sim/match';
+import { UNITS, UNIT_BY_ID, sellValue, type Star, type SynergyId } from '../sim/data';
+import { Match, preferredSlot, type Loc, type Pairing, type UnitInstance } from '../sim/match';
 import { BoardRenderer } from '../render/scene';
-import { HOW_TO_PLAY, Hud, esc } from '../ui/hud';
-import { SKINS, type SkinId } from '../ui/skins';
+import { renderPortraits } from '../render/portraits';
+import { bust, hasConceptArt, setRenderedPortrait } from '../ui/art';
+import { Front } from '../ui/front';
+import { Hud, esc } from '../ui/hud';
+import { store, type Settings } from '../ui/store';
+import { BOARD_IDS, type BoardId } from '../ui/theme';
 
-type State = 'menu' | 'prep' | 'combat' | 'result' | 'over';
+type State = 'front' | 'prep' | 'combat' | 'result' | 'over';
 
 const PREP_TIME = 30;
 const FIRST_PREP_TIME = 25;
-const DRAG_THRESHOLD = 8;
+const DRAG_THRESHOLD = 9;
 
-interface Press {
-  key: string | null;
+interface Drag {
+  from: Loc;
+  uid: number;
+  defId: string;
+  star: Star;
+  pointerId: number;
   x: number;
   y: number;
-  pointerId: number;
-  dragging: boolean;
-  from: Loc | null;
+  active: boolean;
 }
 
-function load<T>(key: string, fallback: T): T {
-  try {
-    const v = localStorage.getItem(key);
-    return v === null ? fallback : (JSON.parse(v) as T);
-  } catch {
-    return fallback;
-  }
-}
-
-function save(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* storage unavailable (private mode): settings just won't persist */
-  }
-}
-
-const haptic = (ms = 10) => {
-  try {
-    navigator.vibrate?.(ms);
-  } catch {
-    /* not supported */
-  }
-};
+const $ = (id: string) => document.getElementById(id)!;
 
 export class Game {
   private match!: Match;
-  private state: State = 'menu';
+  private state: State = 'front';
+  private practice = false;
+  private boardId: BoardId = 'sanctum';
+  private avatars: string[] = [];
   private prepLeft = 0;
   private viewing = 0;
-  private press: Press | null = null;
+  private drag: Drag | null = null;
   private combat: Combat | null = null;
   private pairing: Pairing | null = null;
   private acc = 0;
   private resultWait = 0;
   private panelTimer = 0;
-  private speed = load('ct.speed', 1);
-  private skin: SkinId = load<SkinId>('ct.skin', 'painted');
+  private rounds: ('win' | 'loss' | 'draw')[] = [];
+  private damage = new Map<string, number>();
+  private lineup: { defId: string; star: Star }[] = [];
   private last = performance.now();
   readonly renderer: BoardRenderer;
   readonly hud: Hud;
+  readonly front: Front;
 
   constructor() {
-    const canvas = document.getElementById('board') as HTMLCanvasElement;
-    this.renderer = new BoardRenderer(canvas, document.getElementById('overlay')!);
+    // Figurines without a concept sheet get a rendered portrait so every card has art.
+    const missing = UNITS.filter((u) => !hasConceptArt(u.id)).map((u) => u.id);
+    for (const [id, p] of Object.entries(renderPortraits(missing))) setRenderedPortrait(id, p.full, p.bust);
+
+    const canvas = $('board') as HTMLCanvasElement;
+    this.renderer = new BoardRenderer(canvas, $('overlay'));
     this.hud = new Hud({
       buy: (slot) => this.buy(slot),
       reroll: () => this.reroll(),
       buyXp: () => this.buyXp(),
       toggleLock: () => {
-        if (this.state !== 'prep') return;
+        if (this.state !== 'prep' || this.viewing !== 0) return;
         this.match.toggleLock(this.me);
         this.refreshHud();
       },
       ready: () => this.state === 'prep' && this.startCombat(),
       scout: (id) => this.scout(id),
-      openSettings: () => this.openSettings(),
+      menu: () => this.front.settings({ leave: () => this.leaveMatch() }),
+      synergy: (id) => this.synergySheet(id),
+      odds: () => this.match && this.hud.oddsSheet(this.me.level),
     });
-    this.hud.onSynergyTap = (id) => this.hud.synergySheet(id, this.match.boardDefIds(this.match.players[this.viewing]));
-    this.hud.onLevelTap = () => this.match && this.hud.oddsSheet(this.me.level);
-    if (!SKINS[this.skin]) this.skin = 'painted';
-    this.applySkin(this.skin);
+    this.hud.onSheetClose = () => this.renderer.select(null);
+    this.front = new Front(this.hud, {
+      play: (practice) => this.newMatch(practice),
+      settingsChanged: (s) => this.applySettings(s),
+    });
+    this.applySettings(store.settings);
 
-    const ro = new ResizeObserver(() => this.resize());
-    ro.observe(this.hud.stage);
-    this.resize();
+    new ResizeObserver(() => this.resize()).observe(this.hud.stage);
     this.bindPointer(canvas);
+    this.bindSheet();
     requestAnimationFrame((t) => this.loop(t));
   }
 
@@ -98,97 +93,73 @@ export class Game {
 
   private resize() {
     const r = this.hud.stage.getBoundingClientRect();
-    this.renderer.resize(r.width, r.height);
+    if (r.width && r.height) this.renderer.resize(r.width, r.height);
   }
 
-  private applySkin(id: SkinId) {
-    this.skin = id;
-    save('ct.skin', id);
-    this.hud.setSkin(id);
-    this.renderer.setSkin(id);
+  private applySettings(s: Settings) {
+    $('app').classList.toggle('reduce-motion', s.reduceMotion);
+    this.renderer.reduceMotion = s.reduceMotion;
   }
 
-  // ── Screens ──
-
-  showMenu() {
-    this.state = 'menu';
-    const el = this.hud.showScreen(`
-      <h1>Crowns<br/>&amp; Tiles</h1>
-      <p class="sub">Auto battler prototype · 8 players · portrait</p>
-      <button class="btn" id="play">Play vs 7 bots</button>
-      <div class="how">${HOW_TO_PLAY}</div>
-      <p class="sub">Art style preview</p>
-      <div class="seg">${(Object.keys(SKINS) as SkinId[])
-        .map((id) => `<button data-skin="${id}" class="${id === this.skin ? 'on' : ''}">${SKINS[id].label}</button>`)
-        .join('')}</div>`);
-    el.querySelector('#play')!.addEventListener('click', () => this.newMatch());
-    el.querySelectorAll<HTMLElement>('[data-skin]').forEach((b) =>
-      b.addEventListener('click', () => {
-        this.applySkin(b.dataset.skin as SkinId);
-        this.showMenu();
-      }),
-    );
+  private haptic(ms = 10) {
+    if (!store.settings.haptics) return;
+    try {
+      navigator.vibrate?.(ms);
+    } catch {
+      /* not supported */
+    }
   }
 
-  private newMatch() {
-    this.hud.hideScreen();
+  showFront() {
+    this.state = 'front';
+    this.cancelDrag();
+    this.renderer.clearUnits();
+    this.front.show('home');
+  }
+
+  // ── Match lifecycle ──
+
+  private newMatch(practice: boolean) {
     this.hud.hideSheet();
-    this.match = new Match((Date.now() ^ (Math.random() * 1e9)) >>> 0);
+    this.practice = practice;
+    this.match = new Match((Date.now() ^ (Math.random() * 1e9)) >>> 0, store.profile.name);
+    const pref = store.settings.board;
+    this.boardId = BOARD_IDS.includes(pref as BoardId) ? (pref as BoardId) : BOARD_IDS[Math.floor(Math.random() * BOARD_IDS.length)];
+    this.renderer.setBoard(this.boardId);
+    this.hud.setBoardArt(this.boardId);
+    // Each bot collects a figurine as its avatar.
+    const pool = UNITS.filter((u) => hasConceptArt(u.id) && u.id !== store.profile.avatar).map((u) => u.id);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    this.avatars = [store.profile.avatar, ...pool.slice(0, 7)];
+    this.rounds = [];
+    this.damage.clear();
+    this.lineup = [];
+    this.hud.resetHpMemory();
+    $('front').hidden = true;
+    $('screen').hidden = true;
+    $('match').hidden = false;
     this.renderer.clearUnits();
     this.match.startRound();
     this.enterPrep();
+    requestAnimationFrame(() => this.resize());
   }
-
-  private showGameOver() {
-    this.state = 'over';
-    const p = this.me;
-    const won = p.placement === 1;
-    const el = this.hud.showScreen(`
-      <p class="sub">${won ? 'Victory!' : 'Eliminated'}</p>
-      <div class="place">#${p.placement}</div>
-      <h1 style="font-size:28px">${won ? 'You are the last one standing' : `You finished ${ordinal(p.placement)}`}</h1>
-      <p class="sub">Survived ${this.match.round} rounds · level ${p.level}</p>
-      <button class="btn" id="again">Play again</button>
-      <button class="btn ghost" id="menu">Main menu</button>`);
-    el.querySelector('#again')!.addEventListener('click', () => this.newMatch());
-    el.querySelector('#menu')!.addEventListener('click', () => this.showMenu());
-  }
-
-  private openSettings() {
-    this.hud.settingsSheet(this.skin, this.speed, {
-      skin: (id) => {
-        this.applySkin(id);
-        this.openSettings();
-      },
-      speed: (s) => {
-        this.speed = s;
-        save('ct.speed', s);
-        this.openSettings();
-      },
-      restart: () => {
-        this.hud.hideSheet();
-        this.renderer.clearUnits();
-        this.showMenu();
-      },
-      help: () => this.hud.showSheet(`<h3>How to play</h3>${HOW_TO_PLAY}`),
-    });
-  }
-
-  // ── Phases ──
 
   private enterPrep() {
     this.state = 'prep';
-    this.prepLeft = this.match.round === 1 ? FIRST_PREP_TIME : PREP_TIME;
+    this.prepLeft = this.practice ? Infinity : this.match.round === 1 ? FIRST_PREP_TIME : PREP_TIME;
     this.viewing = 0;
     this.combat = null;
-    this.hud.showCombatPanel(false);
+    this.pairing = null;
+    this.hud.setDock('shop');
     this.hud.setReadyVisible(true);
     this.hud.setScouting(null);
     this.hud.setShopDim(false);
-    this.hud.markReroll();
     this.renderer.showPlayer(this.me);
-    this.refreshHud();
-    if (this.match.round === 1) this.hud.banner('Round 1<small>Buy units and drag them onto the board</small>', '', 2600);
+    this.refreshHud(true);
+    if (this.match.round === 1) this.hud.banner('Round 1<small>Tap a card to buy, then drag it onto the board</small>', '', 3000);
   }
 
   private startCombat() {
@@ -196,6 +167,10 @@ export class Game {
     this.hud.hideSheet();
     this.match.beginCombat();
     this.pairing = this.match.humanPairing() ?? null;
+    this.lineup = this.me.board
+      .filter((u): u is UnitInstance => !!u)
+      .sort((a, b) => UNIT_BY_ID[b.defId].tier * 3 ** b.star - UNIT_BY_ID[a.defId].tier * 3 ** a.star)
+      .map((u) => ({ defId: u.defId, star: u.star }));
     if (!this.pairing) {
       this.finishRound();
       return;
@@ -204,25 +179,29 @@ export class Game {
     this.state = 'combat';
     this.acc = 0;
     this.resultWait = 0;
+    this.panelTimer = 0;
     this.viewing = 0;
     this.renderer.startCombat(this.combat);
-    this.renderer.showBench(this.me);
     this.hud.setReadyVisible(false);
     this.hud.setScouting(null);
-    this.hud.showCombatPanel(true);
+    this.hud.setDock('combat');
     this.refreshHud();
     const opp = this.match.players[this.pairing.b];
-    this.hud.banner(`VS ${esc(opp.name)}${this.pairing.ghost ? '<small>Echo of their board</small>' : ''}`, '', 1300);
+    this.hud.banner(`VS ${esc(opp.name)}${this.pairing.ghost ? '<small>An echo of their board</small>' : ''}`, '', 1300);
   }
 
   private finishRound() {
+    if (this.combat) {
+      for (const u of this.combat.units) if (u.side === 0) this.damage.set(u.def.id, (this.damage.get(u.def.id) ?? 0) + u.damageDealt);
+    }
     this.match.endCombat();
     const p = this.me;
-    const res = p.lastResult;
-    if (res === 'win') this.hud.banner('VICTORY', 'win', 1800);
-    else if (res === 'loss') this.hud.banner(`DEFEAT<small>−${p.lastDamageTaken} health</small>`, 'loss', 1800);
-    else if (res === 'draw') this.hud.banner(`DRAW<small>−${p.lastDamageTaken} health</small>`, 'loss', 1800);
-    if (res !== 'win') haptic(40);
+    const res = p.lastResult ?? 'draw';
+    this.rounds.push(res);
+    if (res === 'win') this.hud.banner('Victory', 'win', 1800);
+    else if (res === 'loss') this.hud.banner(`Defeat<small>−${p.lastDamageTaken} health</small>`, 'loss', 1800);
+    else this.hud.banner(`Draw<small>−${p.lastDamageTaken} health</small>`, 'loss', 1800);
+    if (res !== 'win') this.haptic(40);
     this.state = 'result';
     this.resultWait = 2.0;
     this.refreshHud();
@@ -230,60 +209,82 @@ export class Game {
 
   private afterResult() {
     if (!this.me.alive || this.match.phase === 'over') {
-      this.renderer.clearUnits();
-      this.showGameOver();
+      this.endMatch(this.me.placement || 1);
       return;
     }
     this.match.startRound();
     this.enterPrep();
   }
 
+  private leaveMatch() {
+    if (!this.match || this.state === 'front' || this.state === 'over') return;
+    const placement = this.match.alivePlayers().length;
+    this.me.alive = false;
+    this.me.placement = placement;
+    this.endMatch(placement);
+  }
+
+  private endMatch(placement: number) {
+    this.state = 'over';
+    this.cancelDrag();
+    const lineup = this.lineup.length ? this.lineup : [{ defId: store.profile.avatar, star: 1 as Star }];
+    store.addMatch({ date: Date.now(), placement, rounds: this.match.round, lineup });
+    this.renderer.clearUnits();
+    this.front.results({
+      placement,
+      rounds: this.rounds,
+      lineup,
+      damage: [...this.damage.entries()].sort((a, b) => b[1] - a[1]),
+      board: this.boardId,
+      onAgain: () => this.newMatch(this.practice),
+      onHome: () => this.showFront(),
+    });
+  }
+
   // ── Actions ──
 
   private buy(slot: number) {
-    if (this.state !== 'prep' && this.state !== 'combat' && this.state !== 'result') return;
-    if (this.viewing !== 0) return;
+    if (this.state !== 'prep' || this.viewing !== 0) return;
     const p = this.me;
     const id = p.shop[slot];
     if (!id) return;
     if (p.gold < UNIT_BY_ID[id].tier) {
-      this.hud.toast('Not enough gold');
+      this.hud.toast(`Not enough gold: ${UNIT_BY_ID[id].name} costs ${UNIT_BY_ID[id].tier}`);
       this.hud.bumpGold();
       return;
     }
     const merges = this.match.buy(p, slot);
     if (merges === false) {
-      this.hud.toast('Bench is full: sell or place a unit');
+      this.hud.toast('Bench full: sell or place a unit first');
       return;
     }
-    haptic(merges.length ? 25 : 8);
-    for (const mg of merges) this.hud.toast(`${UNIT_BY_ID[mg.defId].name} upgraded to ${'★'.repeat(mg.star)}!`);
+    this.haptic(merges.length ? 25 : 8);
+    for (const mg of merges) this.hud.toast(`${UNIT_BY_ID[mg.defId].name} upgraded to ${'★'.repeat(mg.star)}`);
     this.syncUnits();
     this.refreshHud();
   }
 
   private reroll() {
-    if (this.state === 'menu' || this.state === 'over' || this.viewing !== 0) return;
+    if (this.state !== 'prep' || this.viewing !== 0) return;
     if (!this.match.reroll(this.me)) {
-      this.hud.toast('Not enough gold');
+      this.hud.toast('Not enough gold to reroll (2)');
       this.hud.bumpGold();
       return;
     }
-    haptic(6);
-    this.hud.markReroll();
-    this.refreshHud();
+    this.haptic(6);
+    this.refreshHud(true);
   }
 
   private buyXp() {
-    if (this.state === 'menu' || this.state === 'over' || this.viewing !== 0) return;
+    if (this.state !== 'prep' || this.viewing !== 0) return;
     const before = this.me.level;
     if (!this.match.buyXp(this.me)) {
-      this.hud.toast(this.me.level >= 10 ? 'Max level' : 'Not enough gold');
+      this.hud.toast(this.me.level >= 10 ? 'Already at max level' : 'Not enough gold for XP (4)');
       return;
     }
     if (this.me.level > before) {
-      haptic(25);
-      this.hud.toast(`Level ${this.me.level}! You can field ${this.me.level} units`);
+      this.haptic(25);
+      this.hud.toast(`Level ${this.me.level}: you can field ${this.me.level} units`);
     }
     this.refreshHud();
   }
@@ -301,75 +302,135 @@ export class Game {
     this.refreshHud();
   }
 
-  private refreshHud() {
+  private synergySheet(id: SynergyId) {
+    const viewed = this.match.players[this.viewing];
+    const fielded = this.combat ? this.combat.units.filter((u) => u.side === 0).map((u) => u.def.id) : this.match.boardDefIds(viewed);
+    const owned = viewed.bench.filter((u): u is UnitInstance => !!u).map((u) => u.defId);
+    this.hud.synergySheet(id, fielded, owned);
+  }
+
+  private refreshHud(deal = false) {
     if (!this.match) return;
     const m = this.match;
-    const phase = this.state === 'prep' ? 'PREPARE' : this.state === 'combat' ? 'COMBAT' : this.state === 'result' ? 'RESULT' : '';
+    const phase = this.state === 'prep' ? (this.practice ? 'Practice' : 'Prep') : this.state === 'combat' ? 'Combat' : 'Result';
     this.hud.setRound(m.round, phase);
-    this.hud.renderPlayers(m, { viewing: this.viewing, opponent: this.state === 'prep' ? null : (this.pairing?.b ?? null) });
+    this.hud.renderPlayers(m, { viewing: this.viewing, opponent: this.state === 'prep' ? null : (this.pairing?.b ?? null), avatars: this.avatars });
     this.hud.renderEcon(m, this.me);
-    this.hud.renderShop(m, this.me);
+    this.hud.renderShop(m, this.me, deal);
     const viewed = m.players[this.viewing];
+    this.hud.renderBench(viewed, { readonly: this.state !== 'prep' || this.viewing !== 0, dragging: this.drag?.active ? this.drag.uid : null });
     this.hud.renderSynergies(this.combat ? this.combat.units.filter((u) => u.side === 0).map((u) => u.def.id) : m.boardDefIds(viewed));
   }
 
-  // ── Pointer: tap to inspect, drag to move / sell ──
+  private syncUnits() {
+    if (this.state === 'prep') this.renderer.showPlayer(this.match.players[this.viewing]);
+  }
+
+  // ── Drag and drop: bench (DOM) ⇄ board (3D) ⇄ sell zone, with taps to inspect ──
 
   private bindPointer(canvas: HTMLCanvasElement) {
     canvas.addEventListener('pointerdown', (e) => {
-      if (this.state === 'menu' || this.state === 'over' || this.press) return;
+      if (this.state === 'front' || this.state === 'over' || this.drag) return;
       const key = this.renderer.pick(e.clientX, e.clientY);
-      this.press = { key, x: e.clientX, y: e.clientY, pointerId: e.pointerId, dragging: false, from: key ? this.locOf(key) : null };
-      canvas.setPointerCapture(e.pointerId);
-    });
-    canvas.addEventListener('pointermove', (e) => {
-      const pr = this.press;
-      if (!pr || pr.pointerId !== e.pointerId) return;
-      const canDrag = pr.key?.startsWith('u') && pr.from && this.viewing === 0 && (this.state === 'prep' || pr.from.area === 'bench');
-      if (!pr.dragging) {
-        if (!canDrag || Math.hypot(e.clientX - pr.x, e.clientY - pr.y) < DRAG_THRESHOLD) return;
-        pr.dragging = true;
-        const u = this.match.getAt(this.me, pr.from!)!;
-        this.hud.setSellMode(sellValue(UNIT_BY_ID[u.defId], u.star));
-        haptic(5);
-      }
-      const g = this.renderer.groundPoint(e.clientX, e.clientY);
-      if (g) this.renderer.setDragPosition(pr.key!, g);
-      const overShop = this.hud.isOverShop(e.clientX, e.clientY);
-      this.hud.setSellHover(overShop);
-      const target = g && !overShop ? this.renderer.dropTarget(g) : null;
-      const valid = !!target && (this.state === 'prep' || target.area === 'bench') && this.canDrop(pr.from!, target);
-      this.renderer.highlight(target, valid);
-    });
-    const end = (e: PointerEvent) => {
-      const pr = this.press;
-      if (!pr || pr.pointerId !== e.pointerId) return;
-      this.press = null;
-      if (!pr.dragging) {
-        if (pr.key) this.inspect(pr.key);
+      if (!key) return;
+      if (key.startsWith('c')) {
+        this.inspectCombatUnit(Number(key.slice(1)));
         return;
       }
-      this.renderer.highlight(null);
-      this.hud.setSellMode(null);
-      const g = this.renderer.groundPoint(e.clientX, e.clientY);
-      const from = pr.from!;
-      if (e.type === 'pointerup' && this.hud.isOverShop(e.clientX, e.clientY)) {
-        const gold = this.match.sell(this.me, from);
-        if (gold !== false) {
-          haptic(12);
-          this.hud.toast(`Sold for ${gold} gold`);
-        }
-      } else if (e.type === 'pointerup' && g) {
-        const target = this.renderer.dropTarget(g);
-        if (target && !this.match.move(this.me, from, target) && target.area === 'board') {
-          if (this.state !== 'prep') this.hud.toast('Board is locked during combat');
-          else this.hud.toast(`Unit limit ${this.me.level}: buy XP to field more`);
-        } else if (target) haptic(6);
+      const loc = this.locOfUid(Number(key.slice(1)));
+      if (!loc || this.viewing !== 0 || this.state !== 'prep') {
+        this.inspectKey(key);
+        return;
       }
-      this.syncAfterDrag();
-    };
-    canvas.addEventListener('pointerup', end);
-    canvas.addEventListener('pointercancel', end);
+      this.beginPress(e, loc);
+    });
+    this.hud.benchEl.addEventListener('pointerdown', (e) => {
+      const slot = (e.target as HTMLElement).closest<HTMLElement>('.bslot[data-uid]');
+      if (!slot || this.drag || this.state === 'front' || this.state === 'over') return;
+      const index = Number(slot.dataset.index);
+      if (this.state !== 'prep' || this.viewing !== 0) {
+        this.inspectBench(index);
+        return;
+      }
+      this.beginPress(e, { area: 'bench', index });
+    });
+    this.hud.benchEl.addEventListener('keydown', (e) => {
+      const slot = (e.target as HTMLElement).closest<HTMLElement>('.bslot[data-uid]');
+      if (slot && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        this.inspectBench(Number(slot.dataset.index));
+      }
+    });
+    window.addEventListener('pointermove', (e) => this.onDragMove(e));
+    window.addEventListener('pointerup', (e) => this.onDragEnd(e, false));
+    window.addEventListener('pointercancel', (e) => this.onDragEnd(e, true));
+  }
+
+  private beginPress(e: PointerEvent, from: Loc) {
+    const u = this.match.getAt(this.me, from);
+    if (!u) return;
+    this.drag = { from, uid: u.uid, defId: u.defId, star: u.star, pointerId: e.pointerId, x: e.clientX, y: e.clientY, active: false };
+  }
+
+  private onDragMove(e: PointerEvent) {
+    const d = this.drag;
+    if (!d || d.pointerId !== e.pointerId) return;
+    if (!d.active) {
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < DRAG_THRESHOLD) return;
+      d.active = true;
+      const ghost = $('drag-ghost');
+      ghost.innerHTML = `<img src="${bust(d.defId)}" alt="" />`;
+      ghost.hidden = false;
+      if (d.from.area === 'board') this.renderer.setUnitVisible(`u${d.uid}`, false);
+      else this.hud.benchEl.querySelector(`.bslot[data-index="${d.from.index}"]`)?.classList.add('dragging');
+      this.hud.setSellMode(sellValue(UNIT_BY_ID[d.defId], d.star));
+      this.haptic(5);
+    }
+    $('drag-ghost').style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+    const target = this.dropTargetAt(e.clientX, e.clientY);
+    this.hud.setSellHover(target === 'sell');
+    this.hud.markBenchTarget(target && target !== 'sell' && target.area === 'bench' ? target.index : null);
+    if (target && target !== 'sell' && target.area === 'board') this.renderer.highlight(target.index, this.canDrop(d.from, target));
+    else this.renderer.highlight(null);
+  }
+
+  private dropTargetAt(x: number, y: number): Loc | 'sell' | null {
+    if (this.hud.isOverShop(x, y)) return 'sell';
+    const slot = this.hud.benchSlotAt(x, y);
+    if (slot !== null) return { area: 'bench', index: slot };
+    const r = this.hud.stage.getBoundingClientRect();
+    if (x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+    const g = this.renderer.groundPoint(x, y);
+    const idx = g ? this.renderer.dropTarget(g) : null;
+    return idx === null ? null : { area: 'board', index: idx };
+  }
+
+  private onDragEnd(e: PointerEvent, cancelled: boolean) {
+    const d = this.drag;
+    if (!d || d.pointerId !== e.pointerId) return;
+    if (!d.active) {
+      this.drag = null;
+      if (!cancelled) {
+        if (d.from.area === 'bench') this.inspectBench(d.from.index);
+        else this.inspectKey(`u${d.uid}`);
+      }
+      return;
+    }
+    const target = cancelled ? null : this.dropTargetAt(e.clientX, e.clientY);
+    this.cancelDrag();
+    if (target === 'sell') {
+      const gold = this.match.sell(this.me, d.from);
+      if (gold !== false) {
+        this.haptic(12);
+        this.hud.toast(`Sold ${UNIT_BY_ID[d.defId].name} for ${gold} gold`);
+      }
+    } else if (target) {
+      if (!this.match.move(this.me, d.from, target)) {
+        if (target.area === 'board') this.hud.toast(`Unit limit is ${this.me.level}: buy XP to field more`);
+      } else this.haptic(6);
+    }
+    this.syncUnits();
+    this.refreshHud();
   }
 
   private canDrop(from: Loc, to: Loc) {
@@ -379,28 +440,21 @@ export class Game {
     return true;
   }
 
-  /** Refresh the scene after a drag: prep redraws board and bench; during combat only the bench. */
-  private syncAfterDrag() {
-    this.syncUnits();
-    this.refreshHud();
-  }
-
-  private syncUnits() {
-    if (this.state === 'prep') this.renderer.showPlayer(this.viewing === 0 ? this.me : this.match.players[this.viewing]);
-    else this.renderer.showBench(this.me);
-  }
-
+  /** Abandon any drag in progress (also used when the prep timer runs out). */
   private cancelDrag() {
-    if (!this.press) return;
-    this.press = null;
+    const d = this.drag;
+    this.drag = null;
+    $('drag-ghost').hidden = true;
     this.renderer.highlight(null);
     this.hud.setSellMode(null);
-    this.syncUnits();
+    this.hud.markBenchTarget(null);
+    if (d) {
+      this.renderer.setUnitVisible(`u${d.uid}`, true);
+      this.hud.benchEl.querySelector('.bslot.dragging')?.classList.remove('dragging');
+    }
   }
 
-  private locOf(key: string): Loc | null {
-    if (!key.startsWith('u') || this.viewing !== 0) return null;
-    const uid = Number(key.slice(1));
+  private locOfUid(uid: number): Loc | null {
     const bi = this.me.board.findIndex((u) => u?.uid === uid);
     if (bi !== -1) return { area: 'board', index: bi };
     const ni = this.me.bench.findIndex((u) => u?.uid === uid);
@@ -408,24 +462,74 @@ export class Game {
     return null;
   }
 
-  private inspect(key: string) {
+  // ── Inspect (with tap alternatives to dragging) ──
+
+  private inspectKey(key: string) {
     const info = this.renderer.unitDefAt(key);
     if (!info) return;
-    if (key.startsWith('c') && this.combat) {
-      const u = this.combat.units[Number(key.slice(1))];
-      this.hud.unitSheet(u.def, u.star, { hp: u.hp, maxHp: u.maxHp });
-      return;
-    }
-    const loc = this.locOf(key);
-    const canSell = !!loc && (this.state === 'prep' || loc.area === 'bench');
-    const el = this.hud.unitSheet(info.def, info.star, { sellFor: canSell ? sellValue(info.def, info.star) : undefined });
+    const own = this.viewing === 0 ? this.locOfUid(Number(key.slice(1))) : null;
+    this.renderer.select(key);
+    this.inspectOwned(info.def.id, info.star, own);
+  }
+
+  private inspectBench(index: number) {
+    const viewed = this.match.players[this.viewing];
+    const u = viewed.bench[index];
+    if (!u) return;
+    this.inspectOwned(u.defId, u.star, this.viewing === 0 ? { area: 'bench', index } : null);
+  }
+
+  private inspectOwned(defId: string, star: Star, loc: Loc | null) {
+    const canAct = !!loc && this.state === 'prep';
+    const el = this.hud.unitSheet(UNIT_BY_ID[defId], star, {
+      sellFor: canAct ? sellValue(UNIT_BY_ID[defId], star) : undefined,
+      move: canAct ? (loc!.area === 'bench' ? 'toBoard' : 'toBench') : undefined,
+    });
     el.querySelector('#sheet-sell')?.addEventListener('click', () => {
       if (loc && this.match.sell(this.me, loc) !== false) {
-        haptic(12);
+        this.haptic(12);
         this.hud.hideSheet();
         this.syncUnits();
         this.refreshHud();
       }
+    });
+    el.querySelector('#sheet-move')?.addEventListener('click', () => {
+      if (!loc) return;
+      let ok = false;
+      if (loc.area === 'bench') {
+        const slot = preferredSlot(this.me, UNIT_BY_ID[defId].range > 1);
+        ok = slot !== -1 && this.match.move(this.me, loc, { area: 'board', index: slot });
+        if (!ok) this.hud.toast(`Unit limit is ${this.me.level}: buy XP to field more`);
+      } else {
+        const free = this.me.bench.indexOf(null);
+        ok = free !== -1 && this.match.move(this.me, loc, { area: 'bench', index: free });
+        if (!ok) this.hud.toast('Bench full: sell a unit first');
+      }
+      if (ok) {
+        this.haptic(6);
+        this.hud.hideSheet();
+        this.syncUnits();
+        this.refreshHud();
+      }
+    });
+  }
+
+  private inspectCombatUnit(id: number) {
+    const u = this.combat?.units[id];
+    if (!u) return;
+    this.renderer.select(`c${id}`);
+    this.hud.unitSheet(u.def, u.star, { hp: u.hp, maxHp: u.maxHp });
+  }
+
+  /** In-match: synergy chips and unit tiles inside sheets open the related sheet. */
+  private bindSheet() {
+    $('sheet').addEventListener('click', (e) => {
+      if ($('match').hidden || !this.match) return;
+      const t = e.target as HTMLElement;
+      const syn = t.closest<HTMLElement>('[data-syn]')?.dataset.syn;
+      if (syn) this.synergySheet(syn as SynergyId);
+      const unit = t.closest<HTMLElement>('[data-unit]')?.dataset.unit;
+      if (unit) this.hud.unitSheet(UNIT_BY_ID[unit], 1);
     });
   }
 
@@ -437,10 +541,10 @@ export class Game {
 
     if (this.state === 'prep') {
       this.prepLeft -= dt;
-      this.hud.setTimer(this.prepLeft);
-      if (this.prepLeft <= 0 && !this.press) this.startCombat();
+      this.hud.setTimer(Number.isFinite(this.prepLeft) ? this.prepLeft : null);
+      if (this.prepLeft <= 0) this.startCombat();
     } else if (this.state === 'combat' && this.combat) {
-      this.acc += dt * this.speed;
+      this.acc += dt * store.settings.speed;
       while (this.acc >= TICK && !this.combat.done) {
         this.renderer.combatEvents(this.combat.step());
         this.acc -= TICK;
@@ -450,8 +554,7 @@ export class Game {
       this.panelTimer -= dt;
       if (this.panelTimer <= 0) {
         this.panelTimer = 0.25;
-        const opp = this.match.players[this.pairing!.b];
-        this.hud.renderCombatPanel(this.combat, opp.name, this.pairing!.ghost);
+        this.hud.renderCombat(this.combat, this.match.round, this.match.players[this.pairing!.b].name, this.pairing!.ghost);
       }
       if (this.combat.done) {
         this.resultWait += dt;
@@ -462,13 +565,7 @@ export class Game {
       if (this.resultWait <= 0) this.afterResult();
     }
 
-    this.renderer.frame(dt);
+    if (!$('match').hidden) this.renderer.frame(dt);
     requestAnimationFrame((t) => this.loop(t));
   }
-}
-
-function ordinal(n: number) {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }

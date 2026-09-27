@@ -1,5 +1,7 @@
 # Art Generation Prompts
 
+> **Status:** Style C (Collectible Figurine) was selected. The resulting art direction lives in `docs/art/type-c/`. The prompts below are kept for generating new units, such as the three tier-4 units that don't have concept sheets yet.
+
 Prompts for generating concept art and 3D-ready references for the game's first 3 character factions (6 units each, matching `src/sim/data.ts`) and 3 boards. The target is high-fidelity Unity (URP) graphics that stay readable on a phone screen.
 
 There are **3 art styles** (A, B, C). Each one can be applied to every faction and every board, so you can generate the same unit or board in all three styles and compare them side by side before committing to one look for the whole game. Each faction keeps its own color palette and design motifs in every style, so players can tell factions apart at a glance.
