@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#1d140e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Crowns &amp; Tiles</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Fredoka:wght@500;700&family=Marcellus&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="app" data-skin="painted">
+      <header class="topbar">
+        <button id="btn-settings" class="icon-btn" aria-label="Settings">⚙</button>
+        <div class="round">
+          <span id="round-label">Round 1</span>
+          <span id="phase-label" class="phase">PREP</span>
+        </div>
+        <div id="timer" class="timer">0:30</div>
+        <div class="hp" aria-label="Your health"><span class="heart">❤</span><b id="hp">100</b></div>
+      </header>
+
+      <nav id="players" class="players" aria-label="Players"></nav>
+
+      <main id="stage" class="stage">
+        <canvas id="board"></canvas>
+        <div id="overlay" class="overlay"></div>
+        <div id="synergies" class="synergies" aria-label="Synergies"></div>
+        <div id="scout-banner" class="scout-banner hidden">
+          <span>Viewing <b id="scout-name"></b></span>
+          <button id="scout-back">Back</button>
+        </div>
+        <div id="banner" class="banner hidden"></div>
+        <button id="btn-ready" class="ready-btn">Ready ▶</button>
+        <div id="toast" class="toast hidden"></div>
+      </main>
+
+      <section id="econ" class="econ">
+        <div class="gold" aria-label="Gold">
+          <i class="coin"></i><b id="gold">0</b><small id="interest" title="Interest next round">+0</small>
+        </div>
+        <button id="btn-level" class="level" aria-label="Level and shop odds">
+          <span class="lv">Lv <b id="level">1</b></span>
+          <span class="xpbar"><i id="xpfill"></i></span>
+          <small id="cap">0/1</small>
+        </button>
+        <button id="btn-xp" class="econ-btn" aria-label="Buy XP"><span>⬆ XP</span><small><i class="coin"></i>4</small></button>
+        <button id="btn-reroll" class="econ-btn" aria-label="Reroll shop"><span>⟳</span><small><i class="coin"></i>2</small></button>
+        <button id="btn-lock" class="econ-btn lock" aria-label="Lock shop"><span id="lock-icon">🔓</span><small>Lock</small></button>
+      </section>
+
+      <section id="shop" class="shop">
+        <div id="odds" class="odds"></div>
+        <div id="cards" class="cards"></div>
+        <div class="sell-zone">Drop here to sell for <b id="sell-value">0</b> <i class="coin"></i></div>
+        <div id="combat-panel" class="combat-panel"></div>
+      </section>
+
+      <div id="sheet-backdrop" class="sheet-backdrop hidden"></div>
+      <div id="sheet" class="sheet hidden" role="dialog"></div>
+      <div id="screen" class="screen"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

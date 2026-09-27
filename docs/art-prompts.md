@@ -1,6 +1,6 @@
 # Art Generation Prompts
 
-Prompts for generating concept art and 3D-ready references for the game's first 3 character factions and 3 boards. The target is high-fidelity Unity (URP) graphics that stay readable on a phone screen.
+Prompts for generating concept art and 3D-ready references for the game's first 3 character factions (6 units each, matching `src/sim/data.ts`) and 3 boards. The target is high-fidelity Unity (URP) graphics that stay readable on a phone screen.
 
 There are **3 art styles** (A, B, C). Each one can be applied to every faction and every board, so you can generate the same unit or board in all three styles and compare them side by side before committing to one look for the whole game. Each faction keeps its own color palette and design motifs in every style, so players can tell factions apart at a glance.
 
@@ -110,7 +110,7 @@ Sunforged Dominion faction. A towering armored knight in heavy ivory plate armor
 Sunforged Dominion faction. A lithe, elegant fencer in light gilded armor with a single ornate sunburst pauldron and a flowing half-cape, wielding a curved sunsteel saber whose edge glows molten orange, a long braid, confident stance, a white leather bodice with gold stitching, color palette ivory, gold, sun-orange
 ```
 
-**3. Lumen Archer (ranged, tier 2)**
+**3. Lumen Archer (ranged, tier 1)**
 ```
 Sunforged Dominion faction. A hooded archer with a longbow carved from white wood and set with a glowing prism crystal at the grip, a quiver of arrows made of solidified light, light scale armor over cream robes, a thin golden halo ring floating behind the head, color palette ivory, gold, pale yellow light
 ```
@@ -118,6 +118,11 @@ Sunforged Dominion faction. A hooded archer with a longbow carved from white woo
 **4. Choir Priestess (support caster, tier 3)**
 ```
 Sunforged Dominion faction. A serene priestess in layered white and gold robes with stained-glass panels in the skirt, holding a hanging censer that emits golden light, an open hymnal book floating beside her with glowing pages, a large sunburst halo disc behind her head, color palette ivory, gold, warm amber glow
+```
+
+**4b. Solar Lancer (melee damage, tier 4)**
+```
+Sunforged Dominion faction. A tall cavalry-style knight on foot in sleek gilded plate armor with a crested sunburst helm, wielding a long lance whose tip is a spear of solid sunlight, a flowing white cape with gold trim, a round gilded buckler on the off arm, noble and fierce, color palette ivory, gold, blazing sun-orange light
 ```
 
 **5. The Radiant Colossus (legendary, tier 5)**
@@ -143,7 +148,7 @@ Tidebound Covenant faction. A hulking sailor encased in barnacle-crusted crab-sh
 Tidebound Covenant faction. A sleek eel-like humanoid pirate with smooth dark skin and glowing cyan stripes, dual curved cutlasses, a tattered long navy coat with brass buttons, fin-like crests on the head and forearms, a lean agile build, color palette abyssal navy, teal, violet, cyan bioluminescence
 ```
 
-**3. Harpoon Deadeye (ranged, tier 2)**
+**3. Harpoon Deadeye (ranged, tier 1)**
 ```
 Tidebound Covenant faction. A fishfolk hunter wearing an old brass diving helmet with a round glowing porthole visor, carrying a large brass harpoon cannon with coiled rope, a rubberized diving suit patched with kelp, air tanks on the back, color palette tarnished brass, teal, navy, cyan glow
 ```
@@ -151,6 +156,11 @@ Tidebound Covenant faction. A fishfolk hunter wearing an old brass diving helmet
 **4. Abyssal Siren (caster, tier 3)**
 ```
 Tidebound Covenant faction. An ethereal sorceress with a translucent jellyfish-bell hood and long trailing glowing tendrils in place of a lower robe, floating slightly above the ground, orbs of swirling water hovering around her hands, pearl and coral jewelry, eerie beautiful face, color palette violet, teal, pale pink, cyan bioluminescence
+```
+
+**4b. Maelstrom Gunner (ranged, tier 4)**
+```
+Tidebound Covenant faction. A broad-shouldered storm-sailor with a swirling whirlpool tattoo, carrying a massive multi-barreled brass cannon wrapped in kelp with glowing cyan water swirling in the barrels, a tattered captain's tricorn hat, a bandolier of pearl-like shells, color palette navy, tarnished brass, teal, cyan glow
 ```
 
 **5. Drowned Admiral (legendary, tier 5)**
@@ -171,7 +181,7 @@ Tidebound Covenant faction. A towering undead admiral in a waterlogged navy grea
 Wildroot Clans faction. A huge bear-folk warrior in armor made of thick bark plates bound with vines, moss and small mushrooms growing across the shoulders, a shield carved from a tree-stump cross-section showing growth rings, bone charms on the belt, a calm, sturdy stance, color palette moss green, bark brown, bone white, amber accents
 ```
 
-**2. Thornfang Stalker (melee damage, tier 2)**
+**2. Thornfang Stalker (melee damage, tier 1)**
 ```
 Wildroot Clans faction. A lean lynx-folk hunter with tufted ears and spotted fur, forearms wrapped in thorned vines ending in sharp bone claws, a light leather harness with feathers and amber beads, a crouched predatory stance, color palette tawny fur, moss green, bone white, amber
 ```
@@ -184,6 +194,11 @@ Wildroot Clans faction. A tall stag-folk huntress with large branching antlers d
 **4. Sporecaller Shaman (caster, tier 3)**
 ```
 Wildroot Clans faction. A small wise toad shaman wearing a wide red-capped mushroom as a hat, holding a gnarled staff topped with a cluster of glowing spores, clouds of luminous spores drifting around, a woven grass cloak, strings of amber beads, color palette moss green, mushroom red, amber, soft yellow-green glow
+```
+
+**4b. Moonfang Druid (support caster, tier 4)**
+```
+Wildroot Clans faction. A graceful wolf-folk druid with silver-grey fur, a crescent-moon headdress woven from pale branches, holding a staff topped with a glowing moonstone, a cloak of moss and night-blue leaves, a small pool of silver light swirling at the feet, color palette silver, moss green, night blue, pale moonlight glow
 ```
 
 **5. Elder Heartwood (legendary, tier 5)**
