@@ -1,4 +1,4 @@
-H3 Label Editor simulator and H3.LabelCore - third-party notices (rev A, 2026-09-29)
+H3 Label Editor simulator and H3.LabelCore - third-party notices (rev B, 2026-10-02)
 =====================================================================================
 
 1. QR Code generator library - Project Nayuki (MIT License)
@@ -45,7 +45,11 @@ H3 Label Editor simulator and H3.LabelCore - third-party notices (rev A, 2026-09
    Inter, Roboto Condensed, Archivo Black - open-source fonts published on Google Fonts. Confirm the licence of the
    exact font files H3 ships (SIL Open Font License 1.1 or Apache 2.0) and include their licence texts.
 
-4. Verification tools (used to test this package, not shipped): zxing-cpp (Apache-2.0), Playwright (Apache-2.0),
+4. Linear barcodes (src/h3-linear.js, csharp/H3.LabelCore/Linear.cs: UPC-A, UPC-E, EAN-13, EAN-8, Code 128, GS1-128)
+   are written by Hurst International from ISO/IEC 15420, ISO/IEC 15417 and the GS1 General Specifications. They contain
+   no third-party code.
+
+5. Verification tools (used to test this package, not shipped): zxing-cpp (Apache-2.0), Playwright (Apache-2.0),
    TypeScript compiler (Apache-2.0), Mono (MIT).
 
 Sticky artwork: Hurst International.
