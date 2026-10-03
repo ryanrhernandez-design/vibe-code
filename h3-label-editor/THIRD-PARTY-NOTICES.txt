@@ -52,4 +52,4 @@ H3 Label Editor simulator and H3.LabelCore - third-party notices (rev B, 2026-10
 5. Verification tools (used to test this package, not shipped): zxing-cpp (Apache-2.0), Playwright (Apache-2.0),
    TypeScript compiler (Apache-2.0), Mono (MIT).
 
-Sticky artwork: Hurst International.
+Sticky artwork and the label die outlines: Hurst International.

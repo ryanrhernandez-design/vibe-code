@@ -1,4 +1,4 @@
-# H3 Label Editor Simulator (rev B, 10.02.26)
+# H3 Label Editor Simulator (rev C, 10.02.26)
 
 A working browser simulator of the H3 fruit-label editor. It shows the label layout and generates real barcodes and QR codes:
 
@@ -10,6 +10,12 @@ A working browser simulator of the H3 fruit-label editor. It shows the label lay
 The page also has the engineering controls, a 1-bit 300 dpi print preview, a test print and send-to-lanes.
 
 **Open it:** https://ryanrhernandez-design.github.io/vibe-code/h3-label-editor/
+
+**New in rev C:**
+
+- All 24 Hurst label dies are starting shapes. New label and the Label library list them first, with a search box (die number, size or name).
+- Each die uses its exact outline, so placement and printing follow notches, tabs and odd shapes.
+- The die file name gives the size, e.g. `67_X_1 XF460WM.gif` = 0.67 × 1.00 in, die XF460. Engineering can import more die files.
 
 **New in rev B:**
 
