@@ -1,4 +1,4 @@
-# H3 Label Editor Simulator (rev C, 10.02.26)
+# H3 Label Editor Simulator (rev D, 10.02.26)
 
 A working browser simulator of the H3 fruit-label editor. It shows the label layout and generates real barcodes and QR codes:
 
@@ -10,6 +10,12 @@ A working browser simulator of the H3 fruit-label editor. It shows the label lay
 The page also has the engineering controls, a 1-bit 300 dpi print preview, a test print and send-to-lanes.
 
 **Open it:** https://ryanrhernandez-design.github.io/vibe-code/h3-label-editor/
+
+**New in rev D:**
+
+- DataBar bars and QR modules can go down to 2 dots, so they fit the Hurst dies. Each QR has its own module size.
+- A new barcode or QR starts at the GS1 size and steps down only as far as the label needs. Anything below GS1 is flagged in the engineering checks.
+- 10 sample labels on Hurst dies (5 QR codes, 5 GS1 DataBar Stacked) in the Label library.
 
 **New in rev C:**
 

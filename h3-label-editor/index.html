@@ -367,7 +367,7 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
     <button class="btn" id="btnLang" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>English</button>
     <button class="btn" id="btnExit" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>Exit</button>
   </nav>
-  <div class="foot"><span>Label Editor simulator rev C &middot; DRAFT 2026-10-02 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; whole print dots</span></div>
+  <div class="foot"><span>Label Editor simulator rev D &middot; DRAFT 2026-10-02 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; whole print dots</span></div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -2128,7 +2128,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Core - label model, engineering controls, placement rules, 1-bit renderer and checks.
- * DRAFT - Hurst International, H3 Label Editor simulator rev C, 2026-10-02 (rev B 2026-10-02, rev A 2026-09-29).
+ * DRAFT - Hurst International, H3 Label Editor simulator rev D, 2026-10-02 (rev C and B 2026-10-02, rev A 2026-09-29).
  *
  * Everything here is UI-independent and deterministic, so it can be ported class-for-class to C#:
  *
@@ -2166,7 +2166,9 @@ H3.Core = (function () {
             edgeMarginDots: 6,        // ink stays this far inside the die-cut edge (0.51 mm)
             minLineDots: 2,           // hardware floor: no bar, space or line thinner than 2 dots
             databar: {
-                minXDots: 3,          // GS1 produce minimum X 0.203 mm -> 3 dots (0.254 mm)
+                minXDots: 2,          // rev D (ruled 10.02.26): 2 dots (0.169 mm) so DataBar fits the Hurst dies; below 3 dots the
+                                      // GS1 produce minimum X 0.203 mm is not met, and the engineering check says so
+                defaultXDots: 3,      // new DataBars start at 3 dots (meets GS1) and step down only when the label needs it
                 maxXDots: 6,
                 clearModules: 1       // H3 rule: keep 1 module clear around a DataBar
             },
@@ -2179,7 +2181,9 @@ H3.Core = (function () {
                 hriFont: "roboto-condensed"
             },
             qr: {
-                dotsPerModule: 5,     // GS1 2D minimum X 0.396 mm -> 5 dots (0.423 mm); fixed, not operator-set
+                dotsPerModule: 5,     // module size a new QR starts at: GS1 2D minimum X 0.396 mm -> 5 dots (0.423 mm)
+                minDotsPerModule: 2,  // rev D (ruled 10.02.26): each QR may go down to 2 dots/module to fit the Hurst dies;
+                maxDotsPerModule: 6,  //   below 5 dots the GS1 minimum is not met, and the engineering check says so
                 version: 3,           // smallest QR (version 3 = 29 x 29 modules); the fixed size when sizeMode = "fixed"
                 sizeMode: "grow",     // rev B: "grow" = longer content gets a bigger QR, up to maxVersion; "fixed" = never grows
                 maxVersion: 10,
@@ -2603,6 +2607,16 @@ H3.Core = (function () {
         min = Math.max(min, eng.minLineDots);
         return { min: min, max: Math.max(min, eng.linear.maxXDots) };
     }
+    /** Smallest and largest QR module size (dots) engineering allows. */
+    function qrModuleRange(eng) {
+        var lo = Math.max(eng.minLineDots, eng.qr.minDotsPerModule || eng.qr.dotsPerModule);
+        return { min: lo, max: Math.max(lo, eng.qr.maxDotsPerModule || eng.qr.dotsPerModule) };
+    }
+    /** Module size of a QR element: its own moduleDots, or engineering's default for labels made before rev D. */
+    function qrModuleDots(el, eng) {
+        var r = qrModuleRange(eng);
+        return clampInt(el.moduleDots === undefined || el.moduleDots === null ? eng.qr.dotsPerModule : el.moduleDots, r.min, r.max);
+    }
     /** Where an element's data comes from: "typed" (on the element) or "job" (the job's GTIN / lot). */
     function dataSource(el) {
         if (el.type === "barcode") return (el.source === "job" && symInfo(el.symbology).job) ? "job" : "typed";
@@ -2763,7 +2777,7 @@ H3.Core = (function () {
                      quietDots: qL, quietRightDots: qR, clearDots: lclear, hri: showHri };
         } else if (el.type === "qr") {
             var text = qrContent(el, job, eng);
-            var m = eng.qr.dotsPerModule;
+            var m = qrModuleDots(el, eng);
             var minV = clampInt(eng.qr.version, 1, 40);
             var maxV = eng.qr.sizeMode === "fixed" ? minV : clampInt(eng.qr.maxVersion, minV, 40);
             var qz = eng.qr.quietModules * m;
@@ -2996,6 +3010,7 @@ H3.Core = (function () {
                 check(nm, "Bar width is whole dots and >= minimum", inf.xDots >= xr.min && inf.xDots >= eng.minLineDots,
                       "X = " + inf.xDots + " dots (" + xmm.toFixed(3) + " mm); minimum " + xr.min);
                 if (inf.family === "databar") {
+                    check(nm, "Bar width >= GS1 produce minimum 0.203 mm", xmm >= 0.203, xmm.toFixed(3) + " mm" + (xmm >= 0.203 ? "" : " - print and scan-test before use"));
                     check(nm, "Height >= GS1 minimum", inf.heightDots >= inf.minHeightDots, inf.heightDots + " dots, minimum " + inf.minHeightDots);
                 } else {
                     check(nm, "Bar height >= engineering minimum", inf.heightDots >= eng.linear.minHeightDots, inf.heightDots + " dots, minimum " + eng.linear.minHeightDots);
@@ -3014,6 +3029,8 @@ H3.Core = (function () {
                 check(nm, (inf.sizeMode === "fixed" ? "Fixed size " : "Size ") + inf.size + " x " + inf.size + " at " + inf.dotsPerModule + " dots/module", true,
                       "version " + inf.version + "-" + inf.ecc + (inf.sizeMode === "fixed" ? "" : " (grows " + inf.minVersion + "–" + inf.maxVersion + ")") + ", " +
                       dotsToMm(inf.size * inf.dotsPerModule, eng).toFixed(1) + " mm");
+                var qmm = dotsToMm(inf.dotsPerModule, eng);
+                check(nm, "Module >= GS1 2D minimum 0.396 mm", qmm >= 0.396, inf.dotsPerModule + " dots = " + qmm.toFixed(3) + " mm" + (qmm >= 0.396 ? "" : " - print and scan-test before use"));
                 check(nm, "Content fits", !!inf.modules, inf.text ? inf.text.length + " of " + inf.capacity + " characters (" + inf.mode + ")" : "empty");
                 check(nm, "Quiet zone " + eng.qr.quietModules + " modules clear", !overlapsAny(t, items), inf.quietDots + " dots each side");
                 check(nm, "Rotation locked at 0°", true, "");
@@ -3066,10 +3083,12 @@ H3.Core = (function () {
             case "plu": return extend(base, { plu: opts.plu || "4012", font: "archivo-black", sizePt: 18, bold: false });
             case "barcode":
                 var bsym = opts.symbology || "databar-stacked-omni";
-                return extend(base, { symbology: bsym, source: opts.source || "typed", data: opts.data || "", xDots: xRange(bsym, eng).min, heightDots: 0,
+                var bxr = xRange(bsym, eng);
+                return extend(base, { symbology: bsym, source: opts.source || "typed", data: opts.data || "",
+                                      xDots: symInfo(bsym).family === "databar" ? clampInt(eng.databar.defaultXDots || bxr.min, bxr.min, bxr.max) : bxr.min, heightDots: 0,
                                       hri: true, includeLot: true });
             case "qr": return extend(base, { content: opts.content || "gs1dl", source: opts.source || "typed", gtin: opts.gtin || "", includeLot: true,
-                                             link: opts.link || "https://", text: opts.text || "" });
+                                             link: opts.link || "https://", text: opts.text || "", moduleDots: qrModuleDots({}, eng) });
             case "shape": return extend(base, { kind: opts.kind || "hline", w: 150, h: 60, strokeDots: eng.shape.defaultStrokeDots, fill: false });
         }
         throw new Error("Unknown element type " + type);
@@ -3118,6 +3137,7 @@ H3.Core = (function () {
             if (["gs1dl", "link", "text"].indexOf(el.content) < 0) el.content = "text";
             el.source = el.source === "job" ? "job" : "typed";
             el.gtin = el.gtin === undefined || el.gtin === null ? "" : String(el.gtin);
+            el.moduleDots = qrModuleDots(el, eng);
         }
         if (el.type === "shape") el.strokeDots = Math.max(eng.shape.minStrokeDots, el.strokeDots | 0);
         if (el.rot !== undefined && [0, 90, 180, 270].indexOf(el.rot) < 0) el.rot = 0;
@@ -3133,7 +3153,7 @@ H3.Core = (function () {
         STOCKS: STOCKS, BASIC_STOCKS: BASIC_STOCKS, findStock: findStock, docStock: docStock, cleanStock: cleanStock, stockProblems: stockProblems, stockName: stockName,
         decodeMask: decodeMask, encodeMask: encodeMask, maskFromAlpha: maskFromAlpha, parseDieFileName: parseDieFileName, dieLabel: dieLabel, dieStockFromImage: dieStockFromImage, maskIntegral: maskIntegral,
         labelGeometry: labelGeometry, insideShape: insideShape, printable: printable,
-        SYMBOLOGIES: SYMBOLOGIES, symInfo: symInfo, xRange: xRange, dataSource: dataSource, qrGtinInput: qrGtinInput, linearInput: linearInput,
+        SYMBOLOGIES: SYMBOLOGIES, symInfo: symInfo, xRange: xRange, qrModuleRange: qrModuleRange, qrModuleDots: qrModuleDots, dataSource: dataSource, qrGtinInput: qrGtinInput, linearInput: linearInput,
         Bitmap1: Bitmap1, FIELD_DEFS: FIELD_DEFS, fieldText: fieldText, qrContent: qrContent,
         buildElement: buildElement, elementName: elementName, elementSummary: elementSummary,
         Placement: Placement, overlaps: overlaps, renderLabel: renderLabel, validate: validate,
@@ -3146,7 +3166,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Editor simulator - user interface (browser only).
- * DRAFT - Hurst International, rev C, 2026-10-02 (rev B 2026-10-02, rev A 2026-09-29).
+ * DRAFT - Hurst International, rev D, 2026-10-02 (rev C and B 2026-10-02, rev A 2026-09-29).
  *
  * The UI only calls H3.Core / H3.Gs1 / H3.DataBar / H3.Qr (the portable core). In H3 this layer is rebuilt
  * in the C# UI toolkit; the behaviour (flows, prompts, fixes, lane simulation) is described in the port guide.
@@ -3412,8 +3432,133 @@ if (typeof module !== "undefined") { module.exports = H3; }
         u.elements = [plu4, upc];
         stackBelow(u, [plu4, upc], 81, 2);
 
-        [a, b, c, u].forEach(function (d) { d._preset = true; d.modified = "2026-10-02T17:30:00.000Z"; });
-        return [a, b, c, u];
+        var all = [a, b, c, u].concat(dieSampleDocs());
+        all.forEach(function (d) { d._preset = true; d.modified = "2026-10-02T17:30:00.000Z"; });
+        return all;
+    }
+
+    /** Lays rows of elements out from the band down, each row centred and pushed down (and sideways, up to `shift`) until
+     *  every box fits the die. A row item is an element or a column { col: [elements], gap }. If a row can't fit
+     *  anywhere, its text steps down 0.5 pt and its barcode / QR one dot at a time (font metrics differ by machine). */
+    function layoutRows(doc, rows) {
+        var geo = Core.labelGeometry(Core.docStock(doc), S.eng);
+        var y = geo.band + geo.margin;
+        rows.forEach(function (row) {
+            var items = row.items.map(function (it) { return it.col ? it : { col: [it], gap: 0 }; });
+            var els = []; items.forEach(function (it) { els = els.concat(it.col); });
+            for (var attempt = 0; attempt < 40; attempt++) {
+                var sizes = items.map(function (it) {
+                    var bs = it.col.map(function (e) { return measure(doc, e); });
+                    return { bs: bs, w: Math.max.apply(null, bs.map(function (q) { return q.w; })),
+                             h: bs.reduce(function (t, q) { return t + q.h; }, 0) + (it.gap || 0) * (bs.length - 1) };
+                });
+                var gap = row.gap || 8;
+                var rowW = sizes.reduce(function (t, q) { return t + q.w; }, 0) + gap * (sizes.length - 1);
+                var rowH = Math.max.apply(null, sizes.map(function (q) { return q.h; }));
+                var shift = row.shift === undefined ? 30 : row.shift, found = null;
+                for (var yy = y; yy + rowH <= geo.h && !found; yy++) {
+                    for (var k = 0; k <= 2 * shift && !found; k += 3) {
+                        var dx = (k % 2 ? -1 : 1) * Math.ceil(k / 2);
+                        var x0 = Math.round((geo.w - rowW) / 2) + (row.dx || 0) + dx, pos = [], ok = true, xx = x0;
+                        for (var i = 0; i < items.length && ok; i++) {
+                            var cy = yy + (row.valign === "top" ? 0 : Math.round((rowH - sizes[i].h) / 2));
+                            for (var j = 0; j < items[i].col.length; j++) {
+                                var bj = sizes[i].bs[j], ex = xx + Math.round((sizes[i].w - bj.w) / 2);
+                                if (!Core.Placement.fits(geo, ex, cy, bj.w, bj.h)) { ok = false; break; }
+                                pos.push({ el: items[i].col[j], x: ex, y: cy });
+                                cy += bj.h + (items[i].gap || 0);
+                            }
+                            xx += sizes[i].w + gap;
+                        }
+                        if (ok) found = { pos: pos, y: yy, h: rowH };
+                    }
+                }
+                if (found) {
+                    els.forEach(function (e) { delete e._pt0; });
+                    found.pos.forEach(function (p) {
+                        p.el.x = p.x; p.el.y = p.y;
+                        p.el.hAlign = (els.length === 1 && p.x === Math.round((geo.w - measure(doc, p.el).w) / 2)) ? "center" : "none";
+                    });
+                    y = found.y + found.h + (row.after === undefined ? 4 : row.after);
+                    return;
+                }
+                // shrink one step and try again: text down to 70 % of its size first, then bars / modules, then text to the minimum
+                var shrunk = false;
+                function shrinkText(floorPct) {
+                    els.forEach(function (e) {
+                        if (e.type !== "text" && e.type !== "plu" && e.type !== "field") return;
+                        if (e._pt0 === undefined) e._pt0 = e.sizePt;
+                        if (e.sizePt - 0.5 >= Math.max(S.eng.text.minPt, e._pt0 * floorPct)) { e.sizePt -= 0.5; shrunk = true; }
+                    });
+                }
+                shrinkText(row.keep === "symbol" ? 0 : 0.7);   // keep: "symbol" = all the text gives way before the symbol shrinks
+                if (!shrunk) els.forEach(function (e) {
+                    if (e.type === "barcode" && e.xDots > Core.xRange(e.symbology, S.eng).min) { e.xDots--; shrunk = true; }
+                    if (e.type === "qr" && e.moduleDots > Core.qrModuleRange(S.eng).min) { e.moduleDots--; shrunk = true; }
+                });
+                if (!shrunk) shrinkText(0);
+                if (!shrunk) break;
+            }
+            els.forEach(function (e) { delete e._pt0; e.x = geo.margin; e.y = y; e.hAlign = "none"; });   // couldn't place: the checks will say so
+        });
+    }
+
+    /** Rev D samples: 5 QR codes and 5 GS1 DataBar Stacked on 10 Hurst dies (2-dot minimum, ruled 10.02.26). */
+    function dieSampleDocs() {
+        var eng = S.eng;
+        function E(type, o) { var e = Core.newElement(type, eng, o); for (var k in o) e[k] = o[k]; return e; }
+        function T(t, pt, o) { return E("text", Object.assign({ text: t, sizePt: pt, bold: true, font: "inter" }, o || {})); }
+        function P(n, pt) { return E("plu", { plu: n, sizePt: pt }); }
+        function L(w, st) { return E("shape", { kind: "hline", w: w, strokeDots: st || 3 }); }
+        function D(gtin, x) { return E("barcode", { symbology: "databar-stacked-omni", source: "typed", data: gtin, xDots: x }); }
+        function Q(o, m) { return E("qr", Object.assign({ source: "typed", moduleDots: m }, o)); }
+        function doc(die, name, job, rows) {
+            var d = Core.newDocument(die, name, "Demo");
+            Object.assign(d.job, job);
+            d.elements = [];
+            rows.forEach(function (r) { r.items.forEach(function (it) { d.elements = d.elements.concat(it.col || [it]); }); });
+            layoutRows(d, rows);
+            // the name says the size the symbol ended up at (layout may step it down on a machine with wider fonts)
+            var sym = d.elements.filter(function (e) { return e.type === "qr" || e.type === "barcode"; })[0];
+            d.name = name.replace("{sym}", sym.type === "qr" ? "QR " + sym.moduleDots + " dots" : "DataBar Stacked " + sym.xDots + " dots");
+            return d;
+        }
+        return [
+            // ---- QR codes ----
+            doc("die-xf461", "Die XF461 – Hass Avocado 4225 · {sym}", { gtin: "0950600013442", lot: "MX2611", country: "PRODUCT OF MEXICO" }, [
+                { items: [Q({ content: "gs1dl", gtin: "0950600013442", includeLot: true }, 5)], after: 2 },
+                { items: [P("4225", 13)] }]),
+            doc("die-xf465", "Die XF465 – Banana 4011 · {sym}", { gtin: "0950600013459", lot: "EC0417", country: "PRODUCT OF ECUADOR" }, [
+                { items: [{ col: [P("4011", 16), T("BANANA", 8)], gap: 6 }, Q({ content: "gs1dl", gtin: "0950600013459", includeLot: false }, 4)], gap: 14, after: 6 },
+                { items: [E("field", { field: "lot", sizePt: 7 })] }]),
+            doc("die-xf500-honeycomb", "Die XF500 Honeycomb – Honeycrisp 3283 · {sym}", { gtin: "0950600013466", lot: "WA3283", country: "PRODUCT OF USA" }, [
+                { items: [P("3283", 12)], after: 2 },
+                { items: [Q({ content: "text", text: "HONEYCRISP 3283 LOT WA3283" }, 3)], after: 2 },
+                { items: [T("HONEYCRISP", 6.5)] }]),
+            doc("die-xf516-liberty-bell", "Die XF516 Liberty Bell – Fuji 4131 · {sym}", { gtin: "0950600013473", lot: "US4131", country: "PRODUCT OF USA" }, [
+                { items: [T("FUJI", 9)], after: 2 },
+                { items: [Q({ content: "gs1dl", gtin: "0950600013473", includeLot: true }, 3)], after: 2 },
+                { items: [P("4131", 10)] }]),
+            doc("die-xf180-daisy-girl", "Die XF180 Daisy Girl – Kiwi 4030 · {sym}", { gtin: "0950600013480", lot: "IT4030", country: "PRODUCT OF ITALY" }, [
+                { items: [P("4030", 13), Q({ content: "link", link: "https://example.com/kiwi" }, 3)], gap: 10, after: 4, keep: "symbol" },
+                { items: [L(150, 3)], after: 4 },
+                { items: [T("KIWIFRUIT", 7)] }]),
+            // ---- GS1 DataBar Stacked ----
+            doc("die-xf482-left", "Die XF482 Left – Hass Avocado, GTIN only · {sym}", { gtin: "0950600013497", lot: "MX4046", country: "PRODUCT OF MEXICO" }, [
+                { items: [D("0950600013497", 3)], keep: "symbol" }]),
+            doc("die-xf460", "Die XF460 – Lemon 4958 · {sym}", { gtin: "0950600013503", lot: "CA4958", country: "PRODUCT OF USA" }, [
+                { items: [P("4958", 12)], after: 3 },
+                { items: [D("0950600013503", 2), T("LEMON", 6, { rot: 270 })], gap: 8 }]),
+            doc("die-xf5-20", "Die XF5.20 – Tomatoes on the vine 4664 · {sym}", { gtin: "0950600013510", lot: "MX4664", country: "PRODUCT OF MEXICO" }, [
+                { items: [P("4664", 9), T("TOMATOES", 6.5)], gap: 10, after: 3 },
+                { items: [L(170, 2)], after: 4 },
+                { items: [D("0950600013510", 2)] }]),
+            doc("die-xf179", "Die XF179 – Navel Orange 4012 · {sym}", { gtin: "0950600013527", lot: "CA4012", country: "PRODUCT OF USA" }, [
+                { items: [P("4012", 14)], after: 3 },
+                { items: [D("0950600013527", 2), T("NAVEL", 6, { rot: 270 })], gap: 8 }]),
+            doc("die-xf456", "Die XF456 – Lime 4048 · {sym}", { gtin: "0950600013534", lot: "MX4048", country: "PRODUCT OF MEXICO" }, [
+                { items: [{ col: [P("4048", 12), T("LIME", 9)], gap: 6 }, D("0950600013534", 2)], gap: 12 }])
+        ];
     }
     function measure(doc, el) { return Core.buildElement(el, { eng: S.eng, job: doc.job, text: text }); }
     function stackBelow(doc, els, y0, gap) {
@@ -3462,7 +3607,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
     function updateAddRail() {
         var geo = S.R.geo, e = S.eng;
-        var qrBox = (e.qr.version * 4 + 17 + 2 * e.qr.quietModules) * e.qr.dotsPerModule;
+        var qrBox = (e.qr.version * 4 + 17 + 2 * e.qr.quietModules) * Core.qrModuleRange(e).min;
         var fit = { qr: Core.Placement.fitsAnywhere(geo, qrBox, qrBox) };   // barcodes: the type picker shows which fit
         document.querySelectorAll("[data-add]").forEach(function (b) {
             var t = b.getAttribute("data-add");
@@ -3630,11 +3775,26 @@ if (typeof module !== "undefined") { module.exports = H3; }
         el.hAlign = (s.x === Math.round((S.R.geo.w - it.w) / 2)) ? el.hAlign : "none";
         return true;
     }
+    /** Largest value of a size property (bar width, QR module) from `from` down to `to` that fits somewhere on the label. */
+    function fitSize(el, prop, from, to) {
+        for (var v = from; v >= to; v--) {
+            var t = JSON.parse(JSON.stringify(el)); t[prop] = v;
+            var b = measure(S.doc, t);
+            if (Core.Placement.fitsAnywhere(S.R.geo, b.w, b.h)) { el[prop] = v; return true; }
+        }
+        return false;
+    }
     function shrinkToFit(el) {
         var geo = S.R.geo;
         if (el.type === "qr") {
-            if (el.content === "gs1dl" && el.includeLot) { el.includeLot = false; toast("Lot left out of the QR to make it smaller."); commit(); return; }
-            toast("This QR code is too big for the label. Shorten what it says, or ask engineering about a smaller QR setting.", true); return;
+            var m0 = Core.qrModuleDots(el, S.eng);
+            if (fitSize(el, "moduleDots", m0, Core.qrModuleRange(S.eng).min)) {
+                compute(); var iq = itemFor(el.id); if (iq && !iq.fits) placeFree(el);
+                toast("QR modules made smaller: " + el.moduleDots + " dots."); commit(); return;
+            }
+            el.moduleDots = m0;
+            if (el.content === "gs1dl" && el.includeLot) { el.includeLot = false; toast("Lot left out of the QR to make it smaller."); fitSize(el, "moduleDots", m0, Core.qrModuleRange(S.eng).min); commit(); return; }
+            toast("This QR code is too big for the label even at the smallest modules. Shorten what it says.", true); return;
         }
         if (el.type === "barcode") {
             el.xDots = Core.xRange(el.symbology, S.eng).min; el.heightDots = 0;
@@ -3667,6 +3827,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
     function addElement(type, opts) {
         var el = Core.newElement(type, S.eng, opts);
         if (type === "qr" || type === "barcode" || type === "plu") el.hAlign = "center";
+        if (type === "qr") fitSize(el, "moduleDots", el.moduleDots, Core.qrModuleRange(S.eng).min);
+        if (type === "barcode") fitSize(el, "xDots", el.xDots, Core.xRange(el.symbology, S.eng).min);
         var b = measure(S.doc, el);
         var geo = S.R.geo;
         var boxes = othersBoxes(null);
@@ -3905,12 +4067,13 @@ if (typeof module !== "undefined") { module.exports = H3; }
     function setSymbology(el, sym) {
         var old = el.symbology;
         el.symbology = sym; el.heightDots = 0;
-        el.xDots = Core.xRange(sym, S.eng).min;
+        el.xDots = Core.newElement("barcode", S.eng, { symbology: sym }).xDots;
         if (!Core.symInfo(sym).job) el.source = "typed";
         // carry the number across when it still makes sense, otherwise start from the job's GTIN
         var keep = el.data && Core.symInfo(old).family === Core.symInfo(sym).family && Core.symInfo(sym).family !== "code128";
         if (!keep && el.source === "typed") el.data = defaultBarcodeData(sym);
         Core.sanitiseElement(el, S.eng);
+        fitSize(el, "xDots", el.xDots, Core.xRange(sym, S.eng).min);
         compute();
         var it = itemFor(el.id);
         if (it && !it.fits && Core.Placement.fitsAnywhere(S.R.geo, it.w, it.h)) placeFree(el);
@@ -3988,7 +4151,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             opts.push({ value: x, label: x + (x === xr.min ? " dots" : ""), disabled: !ok && x !== inf.xDots, title: ok ? fmtLen(x) : "Too big for this label" });
         }
         box.appendChild(sec("Bar width", fmtLen(inf.xDots) + " per module", [seg(opts, inf.xDots, function (v) { el.xDots = v; commit(); }),
-            h("div", { class: "hint", text: "Starts at " + xr.min + " dots" + (fam === "databar" ? ", the smallest that meets GS1 for produce" :
+            h("div", { class: "hint", text: "Starts at " + xr.min + " dots" + (fam === "databar" ? (xr.min < 3 ? ". GS1 for produce asks for 0.203 mm = 3 dots or more; 2 dots fits the small dies but print and scan-test it" : ", the smallest that meets GS1 for produce") :
                 fam === "retail" ? " (GS1 retail asks for 0.264 mm = 4 dots or more)" : " (the printhead floor)") + ". Only whole print dots are allowed." +
                 (blocked ? " Wider bars don’t fit this label." : "") })]));
         var stepH = inf.xDots;
@@ -4041,6 +4204,16 @@ if (typeof module !== "undefined") { module.exports = H3; }
             h("div", { class: "meter", id: "qrMeter" }, [h("i")]),
             h("div", { class: "hint", id: "qrMode" })
         ]));
+        var mr = Core.qrModuleRange(S.eng), curM = Core.qrModuleDots(el, S.eng), mopts = [], mblocked = 0;
+        for (var mv = mr.min; mv <= mr.max; mv++) {
+            var tq = JSON.parse(JSON.stringify(el)); tq.moduleDots = mv;
+            var bq = measure(S.doc, tq), okq = Core.Placement.fitsAnywhere(S.R.geo, bq.w, bq.h);
+            if (!okq && mv !== curM) mblocked++;
+            mopts.push({ value: mv, label: mv + (mv === mr.min ? " dots" : ""), disabled: !okq && mv !== curM, title: okq ? fmtLen(mv) : "Too big for this label" });
+        }
+        box.appendChild(sec("Module size", fmtLen(curM) + " per module", [seg(mopts, curM, function (v) { el.moduleDots = v; commit(); }),
+            h("div", { class: "hint", text: "GS1 asks for 0.396 mm = 5 dots or more. Smaller modules fit the small dies; print and scan-test them. Only whole print dots are allowed." +
+                (mblocked ? " Bigger modules don’t fit this label." : "") })]));
         var sizeNote = h("div", { id: "qrSize" });
         box.appendChild(sec("Size", S.eng.qr.sizeMode === "fixed" ? "fixed by engineering" : "grows to fit", [sizeNote]));
         live(function () {
@@ -4901,7 +5074,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             h("div", { class: "twocol" }, [
                 h("div", { class: "sec" }, [h("div", { class: "lbl", text: "1-bit print image" }), h("div", { class: "preview1bit" }, [img]),
                     h("div", { class: "hint", text: S.R.bitmap.w + " × " + S.R.bitmap.h + " dots, 1 pixel = 1 dot. Right-click the image to save it as a PNG." })]),
-                h("div", { class: "sec" }, [h("div", { class: "lbl" }, ["Label file (JSON)", h("span", { class: "v", text: "format h3-label v1: what H3 stores and C# reads" })]), ta,
+                h("div", { class: "sec" }, [h("div", { class: "lbl" }, ["Label file (JSON)", h("span", { class: "v", text: "format h3-label v2: what H3 stores and C# reads" })]), ta,
                     h("div", { class: "row", style: "flex-wrap:wrap" }, [
                         h("button", { class: "btn small", type: "button", text: "Copy", onclick: function () { copyText(ta); } }),
                         file,
@@ -4950,8 +5123,10 @@ if (typeof module !== "undefined") { module.exports = H3; }
             num("set-margin", eng.edgeMarginDots, 0, 30, 1, function (v) { eng.edgeMarginDots = v; }),
             h("div", { class: "k", html: "Minimum line / bar / space (dots)<small>Printhead floor. 1-dot elements don’t print reliably.</small>" }),
             num("set-minline", eng.minLineDots, 2, 6, 1, function (v) { eng.minLineDots = v; eng.shape.minStrokeDots = Math.max(eng.shape.minStrokeDots, v); }),
-            h("div", { class: "k", html: "DataBar minimum bar width (dots)<small>GS1 produce minimum 0.203 mm → 3 dots.</small>" }),
-            num("set-xmin", eng.databar.minXDots, 2, 8, 1, function (v) { eng.databar.minXDots = v; eng.databar.maxXDots = Math.max(eng.databar.maxXDots, v); }),
+            h("div", { class: "k", html: "DataBar minimum bar width (dots)<small>2 dots fits the Hurst dies (ruled 10.02.26). GS1 produce minimum 0.203 mm = 3 dots; below that the check flags it.</small>" }),
+            num("set-xmin", eng.databar.minXDots, 2, 8, 1, function (v) { eng.databar.minXDots = v; eng.databar.maxXDots = Math.max(eng.databar.maxXDots, v); eng.databar.defaultXDots = Math.max(eng.databar.defaultXDots, v); }),
+            h("div", { class: "k", html: "DataBar bar width a new barcode starts at (dots)<small>Steps down automatically when the label is too small.</small>" }),
+            num("set-xdef", eng.databar.defaultXDots, 2, 10, 1, function (v) { eng.databar.defaultXDots = Math.min(Math.max(v, eng.databar.minXDots), eng.databar.maxXDots); }),
             h("div", { class: "k", html: "DataBar maximum bar width (dots)" }),
             num("set-xmax", eng.databar.maxXDots, 2, 10, 1, function (v) { eng.databar.maxXDots = Math.max(v, eng.databar.minXDots); }),
             h("div", { class: "k", html: "UPC / EAN minimum bar width (dots)<small>GS1 retail minimum 0.264 mm → 4 dots. 3 dots (0.254 mm) is flagged in the checks.</small>" }),
@@ -4962,8 +5137,12 @@ if (typeof module !== "undefined") { module.exports = H3; }
             num("set-lxmax", eng.linear.maxXDots, 2, 10, 1, function (v) { eng.linear.maxXDots = v; }),
             h("div", { class: "k", html: "Linear barcodes shortest bars (dots)<small>UPC, EAN, Code 128, GS1-128. 60 dots = 5.1 mm.</small>" }),
             num("set-lminh", eng.linear.minHeightDots, 24, 300, 1, function (v) { eng.linear.minHeightDots = v; }),
-            h("div", { class: "k", html: "QR dots per module<small>GS1 2D minimum 0.396 mm → 5 dots. Fixed on every label.</small>" }),
-            num("set-qrdots", eng.qr.dotsPerModule, 2, 10, 1, function (v) { eng.qr.dotsPerModule = v; }),
+            h("div", { class: "k", html: "QR module size a new code starts at (dots)<small>GS1 2D minimum 0.396 mm → 5 dots. Steps down automatically when the label is too small.</small>" }),
+            num("set-qrdots", eng.qr.dotsPerModule, 2, 10, 1, function (v) { eng.qr.dotsPerModule = Math.min(Math.max(v, eng.qr.minDotsPerModule), eng.qr.maxDotsPerModule); }),
+            h("div", { class: "k", html: "QR smallest module (dots)<small>2 dots fits the Hurst dies (ruled 10.02.26); below 5 dots the check flags it.</small>" }),
+            num("set-qrmin", eng.qr.minDotsPerModule, 2, 10, 1, function (v) { eng.qr.minDotsPerModule = v; eng.qr.maxDotsPerModule = Math.max(eng.qr.maxDotsPerModule, v); eng.qr.dotsPerModule = Math.max(eng.qr.dotsPerModule, v); }),
+            h("div", { class: "k", html: "QR largest module (dots)" }),
+            num("set-qrmaxdots", eng.qr.maxDotsPerModule, 2, 10, 1, function (v) { eng.qr.maxDotsPerModule = Math.max(v, eng.qr.minDotsPerModule); eng.qr.dotsPerModule = Math.min(eng.qr.dotsPerModule, eng.qr.maxDotsPerModule); }),
             h("div", { class: "k", html: "QR size<small>Grow: longer content gets a bigger code. Fixed: every QR is the same size and long content is refused.</small>" }),
             sel("set-qrmode", eng.qr.sizeMode, [["grow", "Grows to fit"], ["fixed", "Fixed"]], function (v) { eng.qr.sizeMode = v; }),
             h("div", { class: "k", html: "QR smallest version<small>The fixed size when QR size is Fixed. 1 = 21×21, 3 = 29×29, 5 = 37×37 modules.</small>" }),
@@ -5161,7 +5340,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
                 refresh(true);
             });
         }
-        window.H3Editor = { state: S, refresh: refresh, env: env };
+        window.H3Editor = { state: S, refresh: refresh, env: env, printedCanvas: printedCanvas, presetDocs: presetDocs };
     }
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
