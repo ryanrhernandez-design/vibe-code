@@ -3945,6 +3945,11 @@ if (typeof module !== "undefined") { module.exports = H3; }
                 REPO.B.resolveNames(ids, function () { if (REPO.redraw) REPO.redraw(); });
             }
             if (!shown.length) list.appendChild(h("div", { class: "hint", text: REPO.list.length ? "No label matches." : "No labels yet. Make a label and press Save: it lands here for the whole team." }));
+            if (!REPO.list.length && REPO.canWrite !== false) {
+                var seedBtn = h("button", { class: "btn small", type: "button", id: "repo-seed", text: "Add the 10 Hurst die samples" });
+                seedBtn.addEventListener("click", function () { repoSeedSamples(seedBtn); });
+                list.appendChild(h("div", { class: "row" }, [seedBtn]));
+            }
             shown.forEach(function (e) { list.appendChild(card(e)); });
         }
         wrap.appendChild(head); wrap.appendChild(tools); wrap.appendChild(list);
@@ -3958,6 +3963,32 @@ if (typeof module !== "undefined") { module.exports = H3; }
             if (f) { q.focus(); }
         };
         return wrap;
+    }
+    /** Load the built-in die samples into an empty repository (one save each). */
+    function repoSeedSamples(btn) {
+        var docs = S.library.filter(function (d) { return d._preset && d.name.indexOf("Die ") === 0; });
+        var i = 0, done = 0;
+        btn.disabled = true;
+        function next() {
+            if (i >= docs.length) {
+                addLog("Added " + done + " die samples to the label repository.");
+                toast("Added " + done + " die samples to the label repository");
+                repoChanged(); return;
+            }
+            var d = docs[i++];
+            btn.textContent = "Adding " + i + " of " + docs.length + "…";
+            var file = JSON.parse(Core.serialize(stripPrivate(d)));
+            var id = repoSlug(String(d.name).split(" · ")[0]), now = new Date().toISOString();
+            var head = repoSummary(file);
+            head.rev = 1; head.savedAt = now; head.savedBy = REPO.me; head.createdAt = now; head.createdBy = REPO.me;
+            head.source = "seed"; head.archived = false; head.file = file;
+            if (REPO.byId[id]) { next(); return; }
+            REPO.B.save(id, head, null).then(function () { done++; next(); }, function (e) {
+                btn.disabled = false; btn.textContent = "Add the 10 Hurst die samples";
+                toast("Stopped after " + done + ": " + REPO.B.errText(e) + ".", true);
+            });
+        }
+        next();
     }
     function repoHistory(entry) {
         var body = h("div", { class: "sec" }, [h("div", { class: "hint", text: "Loading the history…" })]);
