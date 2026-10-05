@@ -1,4 +1,4 @@
-# H3 Label Editor Simulator (rev D, 10.02.26)
+# H3 Label Editor Simulator (rev E, 10.05.26)
 
 A working browser simulator of the H3 fruit-label editor. It shows the label layout and generates real barcodes and QR codes:
 
@@ -10,6 +10,8 @@ A working browser simulator of the H3 fruit-label editor. It shows the label lay
 The page also has the engineering controls, a 1-bit 300 dpi print preview, a test print and send-to-lanes.
 
 **Open it:** https://ryanrhernandez-design.github.io/vibe-code/h3-label-editor/
+
+**New in rev E:** a shared label repository with revision history. It works in the team's copy of the simulator on claude.ai; on this public page, labels are saved in your browser.
 
 **New in rev D:**
 

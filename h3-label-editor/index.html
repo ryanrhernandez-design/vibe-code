@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>H3 Label Editor Simulator</title>
-<meta name="description" content="Working simulator of the H3 Label Editor: GS1 DataBar, UPC/EAN, Code 128, GS1-128 and QR generated in H3, the 24 Hurst die shapes, engineering controls, 1-bit 300 dpi print preview, test print and send to lanes.">
+<meta name="description" content="Working simulator of the H3 Label Editor: GS1 DataBar, UPC/EAN, Code 128, GS1-128 and QR generated in H3, the 24 Hurst die shapes, a shared label repository with revision history, engineering controls, 1-bit 300 dpi print preview, test print and send to lanes.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Roboto+Condensed:wght@400;700&display=swap">
@@ -277,6 +277,25 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
 .shapescroll { max-height: 380px; overflow: auto; padding-right: 4px; }
 .diesec { border: 1px dashed var(--border); border-radius: 10px; padding: 10px 12px; }
 
+/* rev E: label repository */
+.repohead { display: flex; flex-direction: column; gap: 4px; }
+.repotools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.repotools .inp { flex: 1 1 220px; min-width: 0; }
+.repotools .seg { flex: 0 1 auto; }
+.repotools .seg button { padding: 6px 10px; min-height: 34px; }
+.repocard { padding: 0; gap: 0; overflow: hidden; }
+.repocard .cardopen { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 10px 10px 6px; cursor: pointer; }
+.repocard .cardopen:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 12px; }
+.repocard .cardacts { display: flex; gap: 6px; padding: 0 8px 8px; }
+.repocard .cardacts .btn { flex: 1; }
+.repocard.archived { opacity: .72; }
+.repocard .okt { color: var(--ok); } .repocard .errt { color: var(--warn); }
+.btn.warnbtn { border-color: var(--warn); color: var(--warn); }
+.revrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+.revrow:first-of-type { border-top: 0; }
+.libtabs .seg { max-width: 640px; }
+.libsec[hidden] { display: none; }
+
 </style>
 </head>
 <body>
@@ -367,7 +386,7 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
     <button class="btn" id="btnLang" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>English</button>
     <button class="btn" id="btnExit" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>Exit</button>
   </nav>
-  <div class="foot"><span>Label Editor simulator rev D &middot; DRAFT 2026-10-02 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; whole print dots</span></div>
+  <div class="foot"><span>Label Editor simulator rev E &middot; DRAFT 2026-10-05 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; whole print dots</span></div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -2128,7 +2147,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Core - label model, engineering controls, placement rules, 1-bit renderer and checks.
- * DRAFT - Hurst International, H3 Label Editor simulator rev D, 2026-10-02 (rev C and B 2026-10-02, rev A 2026-09-29).
+ * DRAFT - Hurst International, H3 Label Editor simulator rev E, 2026-10-05 (revs D, C, B 2026-10-02, rev A 2026-09-29).
  *
  * Everything here is UI-independent and deterministic, so it can be ported class-for-class to C#:
  *
@@ -3166,7 +3185,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Editor simulator - user interface (browser only).
- * DRAFT - Hurst International, rev D, 2026-10-02 (rev C and B 2026-10-02, rev A 2026-09-29).
+ * DRAFT - Hurst International, rev E, 2026-10-05 (rev D, C, B 2026-10-02, rev A 2026-09-29).
  *
  * The UI only calls H3.Core / H3.Gs1 / H3.DataBar / H3.Qr (the portable core). In H3 this layer is rebuilt
  * in the C# UI toolkit; the behaviour (flows, prompts, fixes, lane simulation) is described in the port guide.
@@ -3273,6 +3292,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         log: [],
         view: { s: 2, ox: 0, oy: 0, fit: true, dotGrid: false },
         savedAt: null, dirty: false,
+        repoId: null, repoRev: 0,     // the open label's entry in the shared label repository (rev E), if it came from there
         R: null, V: null,
         fontsReady: false
     };
@@ -3383,6 +3403,10 @@ if (typeof module !== "undefined") { module.exports = H3; }
     }
 
     function saveDoc() {
+        if (REPO.state === "on" && REPO.canWrite !== false) { repoSave(false); return; }
+        saveLocal();
+    }
+    function saveLocal(note) {
         S.doc.modified = new Date().toISOString();
         var copy = JSON.parse(JSON.stringify(S.doc));
         var replaced = false;
@@ -3394,9 +3418,282 @@ if (typeof module !== "undefined") { module.exports = H3; }
         if (!replaced) S.library.unshift(copy);
         storeLibrary();
         S.savedAt = new Date(); S.dirty = false;
-        addLog("Saved label “" + S.doc.name + "” to the library.");
-        toast("Saved “" + S.doc.name + "”");
+        addLog("Saved label “" + S.doc.name + "” to the library" + (REPO.state === "on" ? " in this browser" : "") + ".");
+        toast(note || ("Saved “" + S.doc.name + "”"), !!note);
         refresh(false);
+    }
+
+    // =================================================================================================
+    // Label repository (rev E): every label saved in the simulator, shared with everyone who can open the published
+    // simulator on claude.ai, with its full revision history. Stored with the page's `db` capability:
+    //   labels/<id>                    the label: summary fields for the list + `file` (the latest label file)
+    //   labels/<id>/revisions/<revId>  every saved revision: rev, savedAt, savedBy, file
+    // Nothing is ever deleted from the page: Archive hides a label (and Restore brings it back). Outside claude.ai (the
+    // GitHub page, the HTML file on a PC) there is no repository and labels are saved in the browser, as before.
+    // =================================================================================================
+    var REPO = { state: "off", db: null, user: null, downloads: null, me: null, canWrite: null, list: [], byId: {},
+                 thumbs: {}, names: {}, error: "", redraw: null };
+    function repoConnect() {
+        var c = window.claude;
+        if (!c || typeof c.use !== "function") return;            // not inside claude.ai: browser library only
+        REPO.state = "connecting";
+        Promise.all([c.use("db"), c.use("user"), c.use("downloads")]).then(function (r) {
+            REPO.downloads = r[2] || null;
+            REPO.user = r[1] || null;
+            if (!r[0]) { REPO.state = "off"; repoChanged(); return; }
+            REPO.db = r[0];
+            if (REPO.user) {
+                REPO.user.id().then(function (id) { REPO.me = id; });
+                REPO.user.can("data.write").then(function (v) { REPO.canWrite = v; repoChanged(); });
+            }
+            REPO.db.collection("labels").onSnapshot(function (snap) {
+                REPO.list = []; REPO.byId = {};
+                snap.docs.forEach(function (d) {
+                    if (!d.exists) return;
+                    var e = d.data(); if (!e || !e.file) return;
+                    var o = { id: d.id, data: e };
+                    REPO.list.push(o); REPO.byId[d.id] = o;
+                });
+                REPO.list.sort(function (a, b) { return String(b.data.savedAt || "").localeCompare(String(a.data.savedAt || "")); });
+                REPO.state = "on"; REPO.error = "";
+                repoChanged();
+            }, function (err) {
+                REPO.state = "off"; REPO.error = err && err.code || "unavailable";
+                addLog("Label repository unavailable (" + REPO.error + "). Labels are saved in this browser.");
+                repoChanged();
+            });
+        }).catch(function () { REPO.state = "off"; repoChanged(); });
+    }
+    function repoChanged() {
+        if (S.doc) renderTopbar();
+        if (REPO.redraw) REPO.redraw();
+    }
+    function repoSlug(name) { return (String(name || "label").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").substring(0, 40) || "label"); }
+    function repoRand() { return Math.random().toString(36).substring(2, 6); }
+    /** Summary fields kept on the label's repository entry, for the list, search and filters. */
+    function repoSummary(file) {
+        var st = file.stock || Core.findStock(file.stockId);
+        var syms = [], plus = [];
+        (file.elements || []).forEach(function (e) {
+            if (e.type === "qr") syms.push("qr");
+            else if (e.type === "barcode") syms.push(e.symbology);
+            else if (e.type === "plu" && e.plu) plus.push(String(e.plu));
+        });
+        return { name: file.name || "", customer: file.customer || "", stockId: file.stockId || st.id, stockName: st.name || "", die: st.die || "",
+                 symbols: syms, plus: plus, gtin: (file.job && file.job.gtin) || "" };
+    }
+    function repoFile() {
+        var f = JSON.parse(Core.serialize(stripPrivate(S.doc)));
+        f.modified = new Date().toISOString();
+        return f;
+    }
+    /** Save the open label to the repository: a new revision of its entry, or a new entry (asNew, or not from there). */
+    function repoSave(asNew) {
+        var db = REPO.db, file = repoFile();
+        var cur = (!asNew && S.repoId) ? REPO.byId[S.repoId] : null;
+        var id = cur ? S.repoId : repoSlug(file.name) + "-" + Date.now().toString(36) + repoRand();
+        var headRev = cur ? (cur.data.rev || 0) : 0, rev = headRev + 1;
+        var raced = cur && S.repoRev && headRev > S.repoRev ? headRev : 0;   // someone saved since this copy was opened
+        var now = new Date().toISOString();
+        var revId = "r" + ("000" + rev).slice(-4) + "-" + repoRand();
+        var head = repoSummary(file);
+        head.rev = rev; head.revId = revId; head.savedAt = now; head.savedBy = REPO.me;
+        head.createdAt = cur ? (cur.data.createdAt || now) : now;
+        head.createdBy = cur ? (cur.data.createdBy === undefined ? null : cur.data.createdBy) : REPO.me;
+        if (cur && cur.data.source) head.source = cur.data.source;
+        head.archived = false; head.file = file;
+        var btn = el$("btnSave"); if (btn) btn.disabled = true;
+        function attempt(retry) {
+            return db.doc("labels/" + id + "/revisions/" + revId).set({ rev: rev, savedAt: now, savedBy: REPO.me, file: file })
+                .then(function () { return db.doc("labels/" + id).set(head); })
+                .catch(function (e) {
+                    if (retry && e && e.code === "unavailable") return new Promise(function (r) { setTimeout(r, 400 + Math.random() * 600); }).then(function () { return attempt(false); });
+                    throw e;
+                });
+        }
+        attempt(true).then(function () {
+            if (btn) btn.disabled = false;
+            S.repoId = id; S.repoRev = rev; S.doc.modified = file.modified;
+            S.savedAt = new Date(); S.dirty = false;
+            addLog("Saved “" + file.name + "” to the label repository, rev " + rev + ".");
+            toast(raced ? "Saved as rev " + rev + ". Someone saved rev " + raced + " while you were editing; both are in the history."
+                        : "Saved “" + file.name + "” to the label repository · rev " + rev, !!raced);
+            refresh(false);
+        }, function (e) {
+            if (btn) btn.disabled = false;
+            var code = e && e.code;
+            if (code === "invalid_argument" || code === "not_granted") {
+                REPO.canWrite = false;
+                saveLocal("You can view the label repository but not save to it (ask the owner for Contributor access). Saved in this browser instead.");
+            } else if (code === "quota_exceeded") {
+                saveLocal("The label repository is full. Archive isn’t enough: ask engineering to export and clear old labels. Saved in this browser instead.");
+            } else {
+                saveLocal("Couldn’t reach the label repository (" + (code || "error") + "). Saved in this browser instead; save again later.");
+            }
+            repoChanged();
+        });
+    }
+    function repoOpen(entry, fileOverride, revNote) {
+        var copy = Core.parseDocument(JSON.parse(JSON.stringify(fileOverride || entry.data.file)), S.eng);
+        loadDoc(copy);
+        S.repoId = entry.id; S.repoRev = entry.data.rev || 0;
+        S.dirty = !!fileOverride; S.savedAt = fileOverride ? null : new Date(entry.data.savedAt || Date.now());
+        addLog("Opened “" + copy.name + "” from the label repository" + (revNote ? " (" + revNote + ")" : ", rev " + S.repoRev) + ".");
+        closeDialog(); refresh(true);
+        if (fileOverride) toast("Opened " + revNote + ". Save to make it the current revision.");
+    }
+    function repoSetArchived(entry, on) {
+        var upd = { archived: on };
+        if (on) { upd.archivedAt = new Date().toISOString(); upd.archivedBy = REPO.me; }
+        return REPO.db.doc("labels/" + entry.id).update(upd).then(function () {
+            addLog((on ? "Archived “" : "Restored “") + entry.data.name + "” in the label repository.");
+            toast(on ? "Archived “" + entry.data.name + "”. Show archived labels to restore it." : "Restored “" + entry.data.name + "”");
+        }, function (e) { toast("Couldn’t change it: " + ((e && e.code) || "error") + ".", true); });
+    }
+    function repoThumb(entry) {
+        var key = entry.id + "@" + (entry.data.revId || entry.data.rev);
+        if (!REPO.thumbs[key]) {
+            try {
+                var d = Core.parseDocument(JSON.parse(JSON.stringify(entry.data.file)), S.eng);
+                var R = Core.renderLabel(d, { eng: S.eng, job: d.job, text: text }), V = Core.validate(d, { eng: S.eng, job: d.job, text: text }, R);
+                REPO.thumbs[key] = { canvas: printedCanvas(R, Math.min(1, 140 / R.geo.h), true), ready: V.ready, problems: V.problems.length };
+            } catch (err) { REPO.thumbs[key] = { canvas: h("div", { class: "hint", text: "Can’t draw this label" }), ready: false, problems: 1 }; }
+        }
+        var t = REPO.thumbs[key];
+        return { canvas: t.canvas.cloneNode ? cloneCanvas(t.canvas) : t.canvas, ready: t.ready, problems: t.problems };
+    }
+    function cloneCanvas(c) {
+        if (!c.getContext) return c.cloneNode(true);
+        var n = document.createElement("canvas"); n.width = c.width; n.height = c.height; n.style.cssText = c.style.cssText;
+        n.getContext("2d").drawImage(c, 0, 0); return n;
+    }
+    function fmtWhen(iso) {
+        if (!iso) return "";
+        var d = new Date(iso); if (isNaN(d)) return "";
+        return d.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    /** Who saved it, as this viewer sees them. Ids are resolved every render (names are never stored). */
+    function repoWho(id, source) {
+        if (!id) return source === "seed" ? "Claude (sample)" : "someone";
+        if (id === REPO.me) return "you";
+        return REPO.names[id] || "someone";
+    }
+    function repoResolveNames(ids) {
+        if (!REPO.user || !ids.length) return;
+        REPO.user.profiles(ids).then(function (ps) {
+            var changed = false;
+            ids.forEach(function (i) { var nm = (ps[i] && ps[i].name) || ""; if (nm && REPO.names[i] !== nm) { REPO.names[i] = nm; changed = true; } });
+            if (changed && REPO.redraw) REPO.redraw();
+        });
+    }
+    /** The repository section of the Label library dialog. */
+    function repoSection(dlg) {
+        var wrap = h("div", { class: "libsec repo" });
+        var ui = { q: "", kind: "all", archived: false };
+        var q = h("input", { class: "inp", type: "search", id: "repo-search", placeholder: "Search: name, customer, die, PLU or GTIN", autocomplete: "off",
+                             oninput: function (e) { ui.q = e.target.value; draw(); } });
+        var list = h("div", { class: "cards", id: "repo-cards" });
+        var head = h("div", { class: "repohead" });
+        var tools = h("div", { class: "repotools" });
+        function matches(e) {
+            var d = e.data;
+            if (!!d.archived !== ui.archived) return false;
+            var sy = d.symbols || [];
+            if (ui.kind === "qr" && sy.indexOf("qr") < 0) return false;
+            if (ui.kind === "databar" && !sy.some(function (x) { return /^databar/.test(x); })) return false;
+            if (ui.kind === "other" && !sy.some(function (x) { return x !== "qr" && !/^databar/.test(x); })) return false;
+            var t = ui.q.trim().toLowerCase();
+            if (!t) return true;
+            var hay = [d.name, d.customer, d.die, d.stockName, (d.plus || []).join(" "), d.gtin].join(" ").toLowerCase();
+            return t.split(/\s+/).every(function (w) { return hay.indexOf(w) >= 0; });
+        }
+        function card(e) {
+            var d = e.data, th = repoThumb(e);
+            var archiveBtn = h("button", { class: "btn small ghost", type: "button", text: d.archived ? "Restore" : "Archive" });
+            archiveBtn.addEventListener("click", function () {
+                if (d.archived) { repoSetArchived(e, false); return; }
+                if (archiveBtn.dataset.sure) { repoSetArchived(e, true); return; }
+                archiveBtn.dataset.sure = "1"; archiveBtn.textContent = "Archive it?"; archiveBtn.classList.add("warnbtn");
+                setTimeout(function () { if (archiveBtn.isConnected) { delete archiveBtn.dataset.sure; archiveBtn.textContent = "Archive"; archiveBtn.classList.remove("warnbtn"); } }, 4000);
+            });
+            var canWrite = REPO.canWrite !== false;
+            return h("div", { class: "card repocard" + (d.archived ? " archived" : ""), "data-repo": e.id }, [
+                h("button", { class: "cardopen", type: "button", "aria-label": "Open " + (d.name || "label"), onclick: function () { whenSaved(dlg, function () { repoOpen(e); }); } }, [
+                    h("div", { class: "thumb" }, [th.canvas]),
+                    h("div", { class: "n", text: d.name || "Untitled" }),
+                    h("div", { class: "m", text: (d.customer || "No customer") + " · " + (d.die ? "Die " + d.die : d.stockName) }),
+                    h("div", { class: "m", text: "Rev " + (d.rev || 1) + " · " + repoWho(d.savedBy, d.source) + " · " + fmtWhen(d.savedAt) }),
+                    h("div", { class: "m " + (th.ready ? "okt" : "errt"), text: th.ready ? "Ready to print" : th.problems + " to fix" })
+                ]),
+                h("div", { class: "cardacts" }, [
+                    h("button", { class: "btn small ghost", type: "button", text: "History", onclick: function () { repoHistory(e); } }),
+                    canWrite ? archiveBtn : null
+                ])
+            ]);
+        }
+        function draw() {
+            head.innerHTML = ""; tools.innerHTML = ""; list.innerHTML = "";
+            var active = REPO.list.filter(function (e) { return !e.data.archived; }).length, arch = REPO.list.length - active;
+            head.appendChild(h("h3", { text: "Label repository" + (REPO.state === "on" ? " · " + active + (active === 1 ? " label" : " labels") : "") }));
+            if (REPO.state === "connecting") { head.appendChild(h("div", { class: "hint", text: "Connecting to the shared label repository…" })); return; }
+            if (REPO.state === "off") { head.appendChild(h("div", { class: "hint err", text: "The shared label repository isn’t available right now. Save keeps labels in this browser." })); return; }
+            head.appendChild(h("div", { class: "hint", text: "Every label saved here is shared with everyone who can open this simulator, with its full history. " +
+                (REPO.canWrite === false ? "You can open and copy them; ask the owner for Contributor access to save here." : "Save adds a new revision; nothing is lost.") }));
+            tools.appendChild(q);
+            tools.appendChild(seg([{ value: "all", label: "All" }, { value: "qr", label: "QR" }, { value: "databar", label: "DataBar" }, { value: "other", label: "Other barcodes" }],
+                ui.kind, function (v) { ui.kind = v; draw(); }));
+            var tg = h("label", { class: "toggle" }, [h("input", { type: "checkbox", id: "repo-archived", onchange: function (ev) { ui.archived = ev.target.checked; draw(); } }), "Archived (" + arch + ")"]);
+            if (ui.archived) tg.querySelector("input").checked = true;
+            tools.appendChild(tg);
+            if (REPO.downloads) tools.appendChild(h("button", { class: "btn small", type: "button", id: "repo-export", html: icon("export") + "Export all", onclick: repoExport }));
+            var shown = REPO.list.filter(matches);
+            var ids = [];
+            shown.forEach(function (e) { if (e.data.savedBy && ids.indexOf(e.data.savedBy) < 0) ids.push(e.data.savedBy); });
+            repoResolveNames(ids);
+            if (!shown.length) list.appendChild(h("div", { class: "hint", text: REPO.list.length ? "No label matches." : "No labels yet. Make a label and press Save: it lands here for the whole team." }));
+            shown.forEach(function (e) { list.appendChild(card(e)); });
+        }
+        wrap.appendChild(head); wrap.appendChild(tools); wrap.appendChild(list);
+        draw();
+        REPO.redraw = function () {
+            if (!wrap.isConnected) { REPO.redraw = null; return; }
+            var f = document.activeElement === q;
+            draw();
+            if (f) { q.focus(); }
+        };
+        return wrap;
+    }
+    function repoHistory(entry) {
+        var body = h("div", { class: "sec" }, [h("div", { class: "hint", text: "Loading the history…" })]);
+        openDialog("History · " + (entry.data.name || "label"), [body], [h("button", { class: "btn", type: "button", text: "Back to the library", onclick: openLibrary })], true);
+        REPO.db.collection("labels/" + entry.id + "/revisions").orderBy("rev", "desc").get().then(function (snap) {
+            body.innerHTML = "";
+            var revs = snap.docs.filter(function (d) { return d.exists; }).map(function (d) { return d.data(); });
+            var ids = []; revs.forEach(function (r) { if (r.savedBy && ids.indexOf(r.savedBy) < 0) ids.push(r.savedBy); });
+            function rows() {
+                body.innerHTML = "";
+                body.appendChild(h("div", { class: "hint", text: revs.length + (revs.length === 1 ? " revision" : " revisions") + ". Opening an older one and saving it makes it the current revision; the newer ones stay in the history." }));
+                revs.forEach(function (r) {
+                    var cur = r.rev === entry.data.rev;
+                    body.appendChild(h("div", { class: "revrow" }, [
+                        h("div", {}, [h("b", { text: "Rev " + r.rev + (cur ? " (current)" : "") }), h("div", { class: "hint", text: fmtWhen(r.savedAt) + " · " + repoWho(r.savedBy, entry.data.source) +
+                            " · " + ((r.file && r.file.elements) ? r.file.elements.length : 0) + " items" })]),
+                        h("button", { class: "btn small", type: "button", text: "Open", onclick: function () { repoOpen(entry, cur ? null : r.file, cur ? null : "rev " + r.rev + " of " + entry.data.rev); } })
+                    ]));
+                });
+            }
+            rows();
+            if (REPO.user && ids.length) REPO.user.profiles(ids).then(function (ps) { ids.forEach(function (i) { if (ps[i] && ps[i].name) REPO.names[i] = ps[i].name; }); rows(); });
+        }, function (e) { body.innerHTML = ""; body.appendChild(h("div", { class: "hint err", text: "Couldn’t load the history (" + ((e && e.code) || "error") + ")." })); });
+    }
+    /** Every label in the repository (latest revisions, archived included and marked) as one JSON file, for H3 and backups. */
+    function repoExport() {
+        var out = { format: "h3-label-repository", version: 1, exported: new Date().toISOString(),
+                    labels: REPO.list.map(function (e) { return { id: e.id, rev: e.data.rev || 1, savedAt: e.data.savedAt || "", archived: !!e.data.archived, file: e.data.file }; }) };
+        var d = new Date(), stamp = d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+        REPO.downloads.save({ filename: "H3 label repository " + stamp + ".json", data: JSON.stringify(out, null, 1) }).then(function () {
+            addLog("Exported the label repository (" + out.labels.length + " labels)."); toast("Exported " + out.labels.length + " labels");
+        }, function (e) { if (e && e.code !== "declined") toast("Couldn’t export: " + e.code + ".", true); });
     }
 
     // =================================================================================================
@@ -3646,6 +3943,9 @@ if (typeof module !== "undefined") { module.exports = H3; }
         if (document.activeElement !== nm) nm.value = S.doc.name;
         var st = Core.docStock(S.doc);
         var saved = S.dirty ? "unsaved changes" : (S.savedAt ? "saved " + S.savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "not saved yet");
+        if (S.repoId && REPO.state === "on") saved += " · repository rev " + S.repoRev;
+        var sb = el$("btnSave");
+        if (sb) sb.title = REPO.state === "on" && REPO.canWrite !== false ? "Save to the shared label repository (a new revision)" : "Save in this browser";
         el$("docSub").textContent = st.name + " · " + (S.doc.customer || "no customer") + " · " + saved;
         var chip = el$("statusChip");
         var n = S.V.problems.length;
@@ -4891,13 +5191,13 @@ if (typeof module !== "undefined") { module.exports = H3; }
     function openLibrary() {
         var dlg;
         var shapes = h("div", { class: "shapescroll" }, [shapePicker(function (st) { openNewLabel(st); }, true)]);
-        var saved = h("div", { class: "cards" });
+        var saved = h("div", { class: "cards" }), samples = h("div", { class: "cards" });
         S.library.forEach(function (d) {
             var R = Core.renderLabel(d, { eng: S.eng, job: d.job, text: text });
             var V = Core.validate(d, { eng: S.eng, job: d.job, text: text }, R);
             var st = Core.docStock(d);
             var cv2 = printedCanvas(R, Math.min(1, 140 / R.geo.h), true);
-            saved.appendChild(h("button", { class: "card", type: "button", onclick: function () { whenSaved(dlg, function () { go(d); }); } }, [
+            (d._preset ? samples : saved).appendChild(h("button", { class: "card", type: "button", onclick: function () { whenSaved(dlg, function () { go(d); }); } }, [
                 h("div", { class: "thumb" }, [cv2]),
                 h("div", { class: "n", text: d.name }),
                 h("div", { class: "m", text: (d.customer || "No customer") + " · " + st.name }),
@@ -4907,15 +5207,34 @@ if (typeof module !== "undefined") { module.exports = H3; }
         function go(d) {
             var copy = Core.parseDocument(JSON.parse(JSON.stringify(d)), S.eng);
             loadDoc(copy); S.dirty = false; S.savedAt = d._preset ? null : new Date(d.modified || Date.now());
+            S.repoId = null; S.repoRev = 0;
             addLog("Opened label “" + copy.name + "”.");
             closeDialog(); refresh(true);
         }
-        dlg = openDialog("Label library", [
-            h("div", { class: "libsec" }, [h("h3", { text: "New label: start by picking the label shape" }), shapes,
+        var secShapes = h("div", { class: "libsec", "data-tab": "new" }, [h("h3", { text: "New label: start by picking the label shape" }), shapes,
                 isEng() ? h("button", { class: "btn small", type: "button", html: icon("plus") + "Add a shape to the library", style: "align-self:flex-start", onclick: function () { openAddShape(); } })
-                        : h("div", { class: "hint", text: "Engineering adds new label shapes (Settings → Engineering mode)." })]),
-            h("div", { class: "libsec" }, [h("h3", { text: "Saved labels" }), saved])
-        ], [h("button", { class: "btn", type: "button", html: icon("export") + "Import or export a label file", onclick: openExport }), h("span", { class: "sp" }),
+                        : h("div", { class: "hint", text: "Engineering adds new label shapes (Settings → Engineering mode)." })]);
+        var repoOn = REPO.state !== "off";
+        var secLocal = (!repoOn || saved.childNodes.length) ? h("div", { class: "libsec", "data-tab": "local" }, [h("h3", { text: repoOn ? "Saved in this browser only" : "Saved labels (this browser)" }),
+                saved.childNodes.length ? saved : h("div", { class: "hint", text: "Labels you save appear here. They are kept in this browser; open the simulator on claude.ai to save to the shared label repository." })]) : null;
+        var secSamples = h("div", { class: "libsec", "data-tab": "samples" }, [h("h3", { text: "Samples" }), samples]);
+        var body;
+        if (repoOn) {
+            // with the shared repository the library opens on it; New label (shape first), samples and browser copies are tabs
+            var secRepo = repoSection(dlg); secRepo.setAttribute("data-tab", "repo");
+            var tabs = [{ value: "repo", label: "Label repository" }, { value: "new", label: "New label" }, { value: "samples", label: "Samples" }];
+            if (secLocal) tabs.push({ value: "local", label: "This browser" });
+            var bar = h("div", { class: "libtabs" });
+            var show = function (v) {
+                bar.innerHTML = ""; bar.appendChild(seg(tabs, v, show));
+                [secRepo, secShapes, secSamples, secLocal].forEach(function (x) { if (x) x.hidden = x.getAttribute("data-tab") !== v; });
+                if (v === "repo") focusSoon("repo-search"); else if (v === "new") focusSoon("shape-search");
+            };
+            body = [bar, secRepo, secShapes, secSamples, secLocal];
+            setTimeout(function () { show("repo"); }, 0);
+        } else body = [secShapes, secLocal, secSamples];
+        dlg = openDialog("Label library", body,
+            [h("button", { class: "btn", type: "button", html: icon("export") + "Import or export a label file", onclick: openExport }), h("span", { class: "sp" }),
             h("button", { class: "btn primary", type: "button", html: icon("plus") + "New label", onclick: function () { openNewLabel(); } })]);
     }
 
@@ -4953,7 +5272,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
                 var nm = el$("nl-name").value || "New label", cu = el$("nl-cust").value || "";
                 whenSaved(dlg, function () {
                     var d = Core.newDocument(shape, nm, cu);
-                    loadDoc(d); S.dirty = true; S.savedAt = null;
+                    loadDoc(d); S.dirty = true; S.savedAt = null; S.repoId = null; S.repoRev = 0;
                     addLog("New label on " + shape.name + ".");
                     closeDialog(); refresh(true);
                 });
@@ -5077,9 +5396,13 @@ if (typeof module !== "undefined") { module.exports = H3; }
                 h("div", { class: "sec" }, [h("div", { class: "lbl" }, ["Label file (JSON)", h("span", { class: "v", text: "format h3-label v2: what H3 stores and C# reads" })]), ta,
                     h("div", { class: "row", style: "flex-wrap:wrap" }, [
                         h("button", { class: "btn small", type: "button", text: "Copy", onclick: function () { copyText(ta); } }),
+                        REPO.downloads ? h("button", { class: "btn small", type: "button", text: "Download", onclick: function () {
+                            REPO.downloads.save({ filename: (S.doc.name || "label").replace(/[\\/:*?"<>|]+/g, " ").trim() + ".json", data: json }).then(function () { toast("Label file downloaded"); },
+                                function (e) { if (e && e.code !== "declined") toast("Couldn’t download: " + e.code + ".", true); });
+                        } }) : null,
                         file,
                         h("button", { class: "btn small primary", type: "button", text: "Open this label", onclick: function () {
-                            try { var d = Core.parseDocument(ta.value, S.eng); loadDoc(d); S.dirty = true; addLog("Imported label “" + d.name + "”."); closeDialog(); refresh(true); }
+                            try { var d = Core.parseDocument(ta.value, S.eng); loadDoc(d); S.dirty = true; S.repoId = null; S.repoRev = 0; addLog("Imported label “" + d.name + "”."); closeDialog(); refresh(true); }
                             catch (err) { msg.textContent = "Can’t open it: " + err.message; msg.className = "hint err"; }
                         } })
                     ]), msg])
@@ -5340,7 +5663,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
                 refresh(true);
             });
         }
-        window.H3Editor = { state: S, refresh: refresh, env: env, printedCanvas: printedCanvas, presetDocs: presetDocs };
+        repoConnect();
+        window.H3Editor = { state: S, refresh: refresh, env: env, printedCanvas: printedCanvas, presetDocs: presetDocs, repo: REPO };
     }
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
