@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>H3 Label Editor Simulator</title>
-<meta name="description" content="Working simulator of the H3 Label Editor: GS1 DataBar, UPC/EAN, Code 128, GS1-128 and QR generated in H3, the 24 Hurst die shapes, a shared label repository with revision history, engineering controls, 1-bit 300 dpi print preview, test print and send to lanes.">
+<meta name="description" content="Working simulator of the H3 Label Editor: GS1 DataBar, UPC/EAN, Code 128, GS1-128 and QR generated in H3, the 24 Hurst die shapes, a shared label repository with revision history (GitHub or claude.ai), engineering controls, 1-bit 300 dpi print preview, test print and send to lanes.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Roboto+Condensed:wght@400;700&display=swap">
@@ -295,6 +295,14 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
 .revrow:first-of-type { border-top: 0; }
 .libtabs .seg { max-width: 640px; }
 .libsec[hidden] { display: none; }
+/* rev F: connect to the GitHub label repository */
+.repoconnect { display: flex; flex-direction: column; gap: 10px; max-width: 560px; }
+.repoconnect .repoform { display: flex; flex-direction: column; gap: 10px; }
+.repoconnect .repoform .inp { width: 100%; box-sizing: border-box; }
+.repoconnect .row { display: flex; gap: 8px; }
+.repohelp { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.repohelp summary { cursor: pointer; font-weight: 600; }
+.repohelp ol { margin: 6px 0 6px 18px; padding: 0; }
 
 </style>
 </head>
@@ -386,7 +394,7 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
     <button class="btn" id="btnLang" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>English</button>
     <button class="btn" id="btnExit" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>Exit</button>
   </nav>
-  <div class="foot"><span>Label Editor simulator rev E &middot; DRAFT 2026-10-05 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; whole print dots</span></div>
+  <div class="foot"><span>Label Editor simulator rev F &middot; DRAFT 2026-10-05 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; whole print dots</span></div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -3185,7 +3193,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Editor simulator - user interface (browser only).
- * DRAFT - Hurst International, rev E, 2026-10-05 (rev D, C, B 2026-10-02, rev A 2026-09-29).
+ * DRAFT - Hurst International, rev F, 2026-10-05 (rev E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
  *
  * The UI only calls H3.Core / H3.Gs1 / H3.DataBar / H3.Qr (the portable core). In H3 this layer is rebuilt
  * in the C# UI toolkit; the behaviour (flows, prompts, fixes, lane simulation) is described in the port guide.
@@ -3403,7 +3411,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
     }
 
     function saveDoc() {
-        if (REPO.state === "on" && REPO.canWrite !== false) { repoSave(false); return; }
+        if (REPO.state === "on" && REPO.B && REPO.canWrite !== false) { repoSave(false); return; }
+        if (REPO.state === "setup" && !REPO.hinted) { REPO.hinted = true; saveLocal("Saved in this browser only. To share it with the team, connect to the label repository (Label library)."); return; }
         saveLocal();
     }
     function saveLocal(note) {
@@ -3424,50 +3433,270 @@ if (typeof module !== "undefined") { module.exports = H3; }
     }
 
     // =================================================================================================
-    // Label repository (rev E): every label saved in the simulator, shared with everyone who can open the published
-    // simulator on claude.ai, with its full revision history. Stored with the page's `db` capability:
-    //   labels/<id>                    the label: summary fields for the list + `file` (the latest label file)
-    //   labels/<id>/revisions/<revId>  every saved revision: rev, savedAt, savedBy, file
-    // Nothing is ever deleted from the page: Archive hides a label (and Restore brings it back). Outside claude.ai (the
-    // GitHub page, the HTML file on a PC) there is no repository and labels are saved in the browser, as before.
+    // Label repository (rev E, rev F): every label saved in the simulator, shared with the team, with its full history.
+    // Two places it can live - same screens, same label entries:
+    //  - GitHub (rev F, the public website and the HTML file): a private repo, one file per label, labels/<id>.json.
+    //    Every save is a commit, so the revision history is the file's git history. The browser connects with a token
+    //    that only reaches that repo (kept in this browser, never in a label or an export) and the person's name.
+    //  - claude.ai (rev E): the published simulator's own database, labels/<id> + labels/<id>/revisions/<revId>.
+    // A label entry: name, customer, stockId, stockName, die, symbols, plus, gtin (for the list and search); rev, savedAt,
+    // savedBy; createdAt, createdBy; archived; source ("seed" for samples Claude added); file = the latest label file.
+    // Nothing is ever deleted from the page: Archive hides a label and Restore brings it back.
     // =================================================================================================
-    var REPO = { state: "off", db: null, user: null, downloads: null, me: null, canWrite: null, list: [], byId: {},
-                 thumbs: {}, names: {}, error: "", redraw: null };
+    var REPO = { kind: "", state: "off", B: null, me: null, myName: "", canWrite: null, list: [], byId: {}, thumbs: {}, names: {},
+                 error: "", redraw: null, downloads: null, hinted: false };
+    var GH_KEY = "h3-label-repo-github-v1", GH_DEFAULT_REPO = "ryanrhernandez-design/h3-label-repository";
+
     function repoConnect() {
         var c = window.claude;
-        if (!c || typeof c.use !== "function") return;            // not inside claude.ai: browser library only
-        REPO.state = "connecting";
-        Promise.all([c.use("db"), c.use("user"), c.use("downloads")]).then(function (r) {
-            REPO.downloads = r[2] || null;
-            REPO.user = r[1] || null;
-            if (!r[0]) { REPO.state = "off"; repoChanged(); return; }
-            REPO.db = r[0];
-            if (REPO.user) {
-                REPO.user.id().then(function (id) { REPO.me = id; });
-                REPO.user.can("data.write").then(function (v) { REPO.canWrite = v; repoChanged(); });
-            }
-            REPO.db.collection("labels").onSnapshot(function (snap) {
-                REPO.list = []; REPO.byId = {};
-                snap.docs.forEach(function (d) {
-                    if (!d.exists) return;
-                    var e = d.data(); if (!e || !e.file) return;
-                    var o = { id: d.id, data: e };
-                    REPO.list.push(o); REPO.byId[d.id] = o;
-                });
-                REPO.list.sort(function (a, b) { return String(b.data.savedAt || "").localeCompare(String(a.data.savedAt || "")); });
-                REPO.state = "on"; REPO.error = "";
-                repoChanged();
-            }, function (err) {
-                REPO.state = "off"; REPO.error = err && err.code || "unavailable";
-                addLog("Label repository unavailable (" + REPO.error + "). Labels are saved in this browser.");
-                repoChanged();
-            });
-        }).catch(function () { REPO.state = "off"; repoChanged(); });
+        if (c && typeof c.use === "function") {
+            REPO.state = "connecting";
+            Promise.all([c.use("db"), c.use("user"), c.use("downloads")]).then(function (r) {
+                REPO.downloads = r[2] || null;
+                if (r[0]) { REPO.B = claudeBackend(r[0], r[1] || null); REPO.kind = "claude"; REPO.B.start(); }
+                else ghStartFromConfig();
+            }).catch(function () { ghStartFromConfig(); });
+            return;
+        }
+        ghStartFromConfig();
     }
     function repoChanged() {
         if (S.doc) renderTopbar();
         if (REPO.redraw) REPO.redraw();
     }
+    function repoSetList(entries) {
+        entries.sort(function (a, b) { return String(b.data.savedAt || "").localeCompare(String(a.data.savedAt || "")); });
+        REPO.list = entries; REPO.byId = {};
+        entries.forEach(function (e) { REPO.byId[e.id] = e; });
+        REPO.state = "on"; REPO.error = "";
+        repoChanged();
+    }
+    function repoUpsert(entry) {
+        var l = REPO.list.filter(function (e) { return e.id !== entry.id; });
+        l.push(entry); repoSetList(l);
+    }
+
+    // ---------------------------------------------------------------- claude.ai backend (the page's db capability)
+    function claudeBackend(db, user) {
+        return {
+            where: "everyone who can open this simulator on claude.ai",
+            start: function () {
+                if (user) {
+                    user.id().then(function (id) { REPO.me = id; });
+                    user.can("data.write").then(function (v) { REPO.canWrite = v; repoChanged(); });
+                }
+                db.collection("labels").onSnapshot(function (snap) {
+                    var out = [];
+                    snap.docs.forEach(function (d) { if (!d.exists) return; var e = d.data(); if (e && e.file) out.push({ id: d.id, data: e }); });
+                    repoSetList(out);
+                }, function (err) {
+                    REPO.state = "off"; REPO.error = err && err.code || "unavailable";
+                    addLog("Label repository unavailable (" + REPO.error + "). Labels are saved in this browser.");
+                    repoChanged();
+                });
+            },
+            refresh: function () { },
+            save: function (id, head) {
+                var revId = "r" + ("000" + head.rev).slice(-4) + "-" + repoRand();
+                head.revId = revId;
+                function attempt(retry) {
+                    return db.doc("labels/" + id + "/revisions/" + revId).set({ rev: head.rev, savedAt: head.savedAt, savedBy: head.savedBy, file: head.file })
+                        .then(function () { return db.doc("labels/" + id).set(head); })
+                        .catch(function (e) {
+                            if (retry && e && e.code === "unavailable") return new Promise(function (r) { setTimeout(r, 400 + Math.random() * 600); }).then(function () { return attempt(false); });
+                            throw e;
+                        });
+                }
+                return attempt(true).then(function () { return { rev: head.rev, raced: 0 }; });
+            },
+            setArchived: function (entry, on) {
+                var upd = { archived: on };
+                if (on) { upd.archivedAt = new Date().toISOString(); upd.archivedBy = REPO.me; }
+                return db.doc("labels/" + entry.id).update(upd);
+            },
+            history: function (entry) {
+                return db.collection("labels/" + entry.id + "/revisions").orderBy("rev", "desc").get().then(function (snap) {
+                    return snap.docs.filter(function (d) { return d.exists; }).map(function (d) {
+                        var r = d.data();
+                        return { title: "Rev " + r.rev, rev: r.rev, savedAt: r.savedAt, savedBy: r.savedBy, current: r.rev === entry.data.rev,
+                                 items: (r.file && r.file.elements) ? r.file.elements.length : 0, load: function () { return Promise.resolve(r.file); } };
+                    });
+                });
+            },
+            resolveNames: function (ids, done) {
+                if (!user || !ids.length) return;
+                user.profiles(ids).then(function (ps) {
+                    var changed = false;
+                    ids.forEach(function (i) { var nm = (ps[i] && ps[i].name) || ""; if (nm && REPO.names[i] !== nm) { REPO.names[i] = nm; changed = true; } });
+                    if (changed && done) done();
+                });
+            },
+            denied: function (e) { return e && (e.code === "invalid_argument" || e.code === "not_granted"); },
+            full: function (e) { return e && e.code === "quota_exceeded"; },
+            errText: function (e) { return (e && (e.code || e.message)) || "error"; },
+            deniedText: "You can view the label repository but not save to it (ask the owner for Contributor access). Saved in this browser instead."
+        };
+    }
+
+    // ---------------------------------------------------------------- GitHub backend (public website, HTML file)
+    function b64enc(str) { return btoa(unescape(encodeURIComponent(str))); }
+    function b64dec(b64) { return decodeURIComponent(escape(atob(String(b64 || "").replace(/\s/g, "")))); }
+    function ghConfigRead() {
+        try { var v = localStorage.getItem(GH_KEY) || sessionStorage.getItem(GH_KEY); return v ? JSON.parse(v) : null; } catch (e) { return null; }
+    }
+    function ghConfigWrite(cfg, remember) {
+        try { localStorage.removeItem(GH_KEY); sessionStorage.removeItem(GH_KEY); (remember ? localStorage : sessionStorage).setItem(GH_KEY, JSON.stringify(cfg)); } catch (e) { }
+    }
+    function ghConfigClear() { try { localStorage.removeItem(GH_KEY); sessionStorage.removeItem(GH_KEY); } catch (e) { } }
+    function ghStartFromConfig() {
+        REPO.kind = "github"; REPO.B = null; REPO.list = []; REPO.byId = {};
+        var cfg = ghConfigRead();
+        if (!cfg || !cfg.token || !cfg.repo) { REPO.state = "setup"; repoChanged(); return; }
+        ghConnect(cfg).catch(function (e) {
+            REPO.state = "setup"; REPO.error = ghErrText(e, cfg.repo);
+            addLog("Label repository: couldn’t connect (" + REPO.error + ").");
+            repoChanged();
+        });
+    }
+    function ghErrText(e, repo) {
+        var st = e && e.status;
+        if (st === 401) return "the token was refused (expired or mistyped)";
+        if (st === 403) return "the token isn’t allowed to do that" + (e.message && /rate limit/i.test(e.message) ? " (GitHub rate limit; try again in a few minutes)" : "");
+        if (st === 404) return "no repository " + repo + " for this token (check the name, and that the token includes it)";
+        if (st === 0) return "GitHub can’t be reached from this network";
+        return (e && e.message) || "error";
+    }
+    /** Check the repo and token, then start listing. Resolves once connected; rejects with the GitHub error. */
+    function ghConnect(cfg) {
+        REPO.kind = "github"; REPO.state = "connecting"; repoChanged();
+        var B = githubBackend(cfg);
+        return B.check().then(function (info) {
+            REPO.B = B; REPO.me = cfg.name || info.login; REPO.myName = cfg.name || info.login;
+            REPO.canWrite = info.push ? null : false;     // a token's own Contents permission shows only when a save is tried
+            REPO.thumbs = {};
+            return B.start();
+        });
+    }
+    function githubBackend(cfg) {
+        var repo = cfg.repo, token = cfg.token, branch = "main", blobs = {}, etag = null, lastTree = null, timer = null;
+        function api(method, path, body, headers) {
+            var hd = { "Accept": "application/vnd.github+json", "Authorization": "Bearer " + token };
+            if (body) hd["Content-Type"] = "application/json";
+            if (headers) for (var k in headers) hd[k] = headers[k];
+            return fetch("https://api.github.com" + path, { method: method, headers: hd, body: body ? JSON.stringify(body) : undefined, cache: "no-store" }).then(function (r) {
+                if (r.status === 304) return { notModified: true };
+                return r.text().then(function (t) {
+                    var j = null; try { j = t ? JSON.parse(t) : null; } catch (e) { }
+                    if (!r.ok) { var err = new Error((j && j.message) || r.statusText || "error"); err.status = r.status; throw err; }
+                    return { json: j, etag: r.headers.get("ETag") };
+                });
+            }, function () { var err = new Error("network"); err.status = 0; throw err; });
+        }
+        function filePath(id, ref) { return "/repos/" + repo + "/contents/labels/" + encodeURIComponent(id) + ".json" + (ref ? "?ref=" + encodeURIComponent(ref) : ""); }
+        function put(id, data, sha, message) {
+            var body = { message: message, content: b64enc(JSON.stringify(data, null, 1) + "\n"), branch: branch };
+            if (sha) body.sha = sha;
+            return api("PUT", filePath(id), body);
+        }
+        function readFile(id) { return api("GET", filePath(id, branch)).then(function (r) { return { sha: r.json.sha, data: JSON.parse(b64dec(r.json.content)) }; }); }
+        function pool(items, n, fn) {
+            var i = 0;
+            function next() { if (i >= items.length) return Promise.resolve(); var it = items[i++]; return fn(it).then(next, next); }
+            var ws = []; for (var k = 0; k < Math.min(n, items.length); k++) ws.push(next());
+            return Promise.all(ws);
+        }
+        function list() {
+            return api("GET", "/repos/" + repo + "/git/trees/" + encodeURIComponent(branch) + "?recursive=1", null, etag ? { "If-None-Match": etag } : null).then(function (r) {
+                if (r.notModified && lastTree) return lastTree;
+                etag = r.etag || null;
+                lastTree = (r.json.tree || []).filter(function (t) { return t.type === "blob" && /^labels\/[^\/]+\.json$/.test(t.path); });
+                return lastTree;
+            }, function (e) { if (e.status === 409) { lastTree = []; return lastTree; } throw e; })   // 409 = empty repository
+                .then(function (tree) {
+                    return pool(tree, 6, function (t) {
+                        if (blobs[t.sha]) return Promise.resolve();
+                        return api("GET", "/repos/" + repo + "/git/blobs/" + t.sha).then(function (r) { try { blobs[t.sha] = JSON.parse(b64dec(r.json.content)); } catch (e) { blobs[t.sha] = null; } });
+                    }).then(function () {
+                        return tree.map(function (t) { return { id: decodeURIComponent(t.path.slice(7, -5)), sha: t.sha, data: blobs[t.sha] }; })
+                                   .filter(function (e) { return e.data && e.data.file; });
+                    });
+                });
+        }
+        function remember(id, sha, data) { blobs[sha] = data; repoUpsert({ id: id, sha: sha, data: data }); }
+        var B = {
+            where: "everyone with the label repository token",
+            check: function () {
+                return api("GET", "/repos/" + repo).then(function (r) {
+                    branch = r.json.default_branch || "main";
+                    return { push: !r.json.permissions || r.json.permissions.push !== false, login: "" };
+                });
+            },
+            start: function () {
+                return list().then(function (l) {
+                    repoSetList(l);
+                    if (timer) clearInterval(timer);
+                    timer = setInterval(function () { if (!document.hidden && REPO.B === B) B.refresh(); }, 60000);
+                });
+            },
+            refresh: function () {
+                return list().then(function (l) { if (REPO.B === B) repoSetList(l); }, function (e) { addLog("Label repository refresh failed (" + ghErrText(e, repo) + ")."); });
+            },
+            stop: function () { if (timer) clearInterval(timer); timer = null; },
+            save: function (id, head, cur) {
+                return put(id, head, cur && cur.sha, "Save “" + head.name + "” · rev " + head.rev + " · " + (head.savedBy || "someone")).then(function (r) {
+                    remember(id, r.json.content.sha, head);
+                    return { rev: head.rev, raced: 0 };
+                }, function (e) {
+                    if (e.status !== 409 && e.status !== 422) throw e;
+                    // someone saved this label first: keep theirs in the history and save on top of it
+                    return readFile(id).then(function (now) {
+                        var raced = now.data.rev || 0;
+                        head.rev = raced + 1;
+                        head.createdAt = now.data.createdAt || head.createdAt; head.createdBy = now.data.createdBy === undefined ? head.createdBy : now.data.createdBy;
+                        if (now.data.source) head.source = now.data.source;
+                        return put(id, head, now.sha, "Save “" + head.name + "” · rev " + head.rev + " · " + (head.savedBy || "someone")).then(function (r) {
+                            remember(id, r.json.content.sha, head);
+                            return { rev: head.rev, raced: raced };
+                        });
+                    });
+                });
+            },
+            setArchived: function (entry, on) {
+                function apply(d) {
+                    d = JSON.parse(JSON.stringify(d)); d.archived = on;
+                    if (on) { d.archivedAt = new Date().toISOString(); d.archivedBy = REPO.myName; } else { delete d.archivedAt; delete d.archivedBy; }
+                    return d;
+                }
+                var msg = (on ? "Archive “" : "Restore “") + entry.data.name + "” · " + (REPO.myName || "someone");
+                var d1 = apply(entry.data);
+                return put(entry.id, d1, entry.sha, msg).then(function (r) { remember(entry.id, r.json.content.sha, d1); }, function (e) {
+                    if (e.status !== 409 && e.status !== 422) throw e;
+                    return readFile(entry.id).then(function (now) { var d2 = apply(now.data); return put(entry.id, d2, now.sha, msg).then(function (r) { remember(entry.id, r.json.content.sha, d2); }); });
+                });
+            },
+            history: function (entry) {
+                return api("GET", "/repos/" + repo + "/commits?sha=" + encodeURIComponent(branch) + "&path=" + encodeURIComponent("labels/" + entry.id + ".json") + "&per_page=100").then(function (r) {
+                    return (r.json || []).map(function (c, i) {
+                        var msg = String(c.commit && c.commit.message || "").split("\n")[0];
+                        var m = /rev (\d+)/.exec(msg), by = /·\s*([^·]+)$/.exec(msg);
+                        var title = m ? "Rev " + m[1] : (/^Archive/.test(msg) ? "Archived" : /^Restore/.test(msg) ? "Restored" : msg);
+                        return { title: title, rev: m ? +m[1] : null, savedAt: c.commit && c.commit.author && c.commit.author.date,
+                                 savedBy: by && !/rev \d+/.test(by[1]) ? by[1].trim() : (c.author && c.author.login) || (c.commit && c.commit.author && c.commit.author.name) || "",
+                                 current: i === 0, items: null,
+                                 load: function () { return api("GET", filePath(entry.id, c.sha)).then(function (x) { return JSON.parse(b64dec(x.json.content)).file; }); } };
+                    });
+                });
+            },
+            resolveNames: function () { },
+            denied: function (e) { return e && e.status === 403 && !/rate limit/i.test(e.message || ""); },
+            full: function () { return false; },
+            errText: function (e) { return ghErrText(e, repo); },
+            deniedText: "This token can read the label repository but not save to it (it needs Contents: Read and write). Saved in this browser instead."
+        };
+        return B;
+    }
+
+    // ---------------------------------------------------------------- shared by both
     function repoSlug(name) { return (String(name || "label").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").substring(0, 40) || "label"); }
     function repoRand() { return Math.random().toString(36).substring(2, 6); }
     /** Summary fields kept on the label's repository entry, for the list, search and filters. */
@@ -3489,47 +3718,34 @@ if (typeof module !== "undefined") { module.exports = H3; }
     }
     /** Save the open label to the repository: a new revision of its entry, or a new entry (asNew, or not from there). */
     function repoSave(asNew) {
-        var db = REPO.db, file = repoFile();
+        var file = repoFile();
         var cur = (!asNew && S.repoId) ? REPO.byId[S.repoId] : null;
         var id = cur ? S.repoId : repoSlug(file.name) + "-" + Date.now().toString(36) + repoRand();
-        var headRev = cur ? (cur.data.rev || 0) : 0, rev = headRev + 1;
-        var raced = cur && S.repoRev && headRev > S.repoRev ? headRev : 0;   // someone saved since this copy was opened
+        var headRev = cur ? (cur.data.rev || 0) : 0;
+        var seen = cur && S.repoRev && headRev > S.repoRev ? headRev : 0;   // someone saved since this copy was opened
         var now = new Date().toISOString();
-        var revId = "r" + ("000" + rev).slice(-4) + "-" + repoRand();
         var head = repoSummary(file);
-        head.rev = rev; head.revId = revId; head.savedAt = now; head.savedBy = REPO.me;
+        head.rev = headRev + 1; head.savedAt = now; head.savedBy = REPO.me;
         head.createdAt = cur ? (cur.data.createdAt || now) : now;
         head.createdBy = cur ? (cur.data.createdBy === undefined ? null : cur.data.createdBy) : REPO.me;
         if (cur && cur.data.source) head.source = cur.data.source;
         head.archived = false; head.file = file;
         var btn = el$("btnSave"); if (btn) btn.disabled = true;
-        function attempt(retry) {
-            return db.doc("labels/" + id + "/revisions/" + revId).set({ rev: rev, savedAt: now, savedBy: REPO.me, file: file })
-                .then(function () { return db.doc("labels/" + id).set(head); })
-                .catch(function (e) {
-                    if (retry && e && e.code === "unavailable") return new Promise(function (r) { setTimeout(r, 400 + Math.random() * 600); }).then(function () { return attempt(false); });
-                    throw e;
-                });
-        }
-        attempt(true).then(function () {
+        var B = REPO.B;
+        B.save(id, head, cur).then(function (res) {
             if (btn) btn.disabled = false;
-            S.repoId = id; S.repoRev = rev; S.doc.modified = file.modified;
+            var raced = Math.max(seen, res.raced || 0);
+            S.repoId = id; S.repoRev = res.rev; S.doc.modified = file.modified;
             S.savedAt = new Date(); S.dirty = false;
-            addLog("Saved “" + file.name + "” to the label repository, rev " + rev + ".");
-            toast(raced ? "Saved as rev " + rev + ". Someone saved rev " + raced + " while you were editing; both are in the history."
-                        : "Saved “" + file.name + "” to the label repository · rev " + rev, !!raced);
+            addLog("Saved “" + file.name + "” to the label repository, rev " + res.rev + ".");
+            toast(raced ? "Saved as rev " + res.rev + ". Someone saved rev " + raced + " while you were editing; both are in the history."
+                        : "Saved “" + file.name + "” to the label repository · rev " + res.rev, !!raced);
             refresh(false);
         }, function (e) {
             if (btn) btn.disabled = false;
-            var code = e && e.code;
-            if (code === "invalid_argument" || code === "not_granted") {
-                REPO.canWrite = false;
-                saveLocal("You can view the label repository but not save to it (ask the owner for Contributor access). Saved in this browser instead.");
-            } else if (code === "quota_exceeded") {
-                saveLocal("The label repository is full. Archive isn’t enough: ask engineering to export and clear old labels. Saved in this browser instead.");
-            } else {
-                saveLocal("Couldn’t reach the label repository (" + (code || "error") + "). Saved in this browser instead; save again later.");
-            }
+            if (B.denied(e)) { REPO.canWrite = false; saveLocal(B.deniedText); }
+            else if (B.full(e)) saveLocal("The label repository is full. Ask engineering to export and clear old labels. Saved in this browser instead.");
+            else saveLocal("Couldn’t reach the label repository (" + B.errText(e) + "). Saved in this browser instead; save again later.");
             repoChanged();
         });
     }
@@ -3543,15 +3759,16 @@ if (typeof module !== "undefined") { module.exports = H3; }
         if (fileOverride) toast("Opened " + revNote + ". Save to make it the current revision.");
     }
     function repoSetArchived(entry, on) {
-        var upd = { archived: on };
-        if (on) { upd.archivedAt = new Date().toISOString(); upd.archivedBy = REPO.me; }
-        return REPO.db.doc("labels/" + entry.id).update(upd).then(function () {
+        return REPO.B.setArchived(entry, on).then(function () {
             addLog((on ? "Archived “" : "Restored “") + entry.data.name + "” in the label repository.");
             toast(on ? "Archived “" + entry.data.name + "”. Show archived labels to restore it." : "Restored “" + entry.data.name + "”");
-        }, function (e) { toast("Couldn’t change it: " + ((e && e.code) || "error") + ".", true); });
+        }, function (e) {
+            if (REPO.B.denied(e)) { REPO.canWrite = false; repoChanged(); }
+            toast("Couldn’t change it: " + REPO.B.errText(e) + ".", true);
+        });
     }
     function repoThumb(entry) {
-        var key = entry.id + "@" + (entry.data.revId || entry.data.rev);
+        var key = entry.id + "@" + (entry.sha || entry.data.revId || entry.data.rev) + (entry.data.archived ? "a" : "");
         if (!REPO.thumbs[key]) {
             try {
                 var d = Core.parseDocument(JSON.parse(JSON.stringify(entry.data.file)), S.eng);
@@ -3560,7 +3777,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             } catch (err) { REPO.thumbs[key] = { canvas: h("div", { class: "hint", text: "Can’t draw this label" }), ready: false, problems: 1 }; }
         }
         var t = REPO.thumbs[key];
-        return { canvas: t.canvas.cloneNode ? cloneCanvas(t.canvas) : t.canvas, ready: t.ready, problems: t.problems };
+        return { canvas: cloneCanvas(t.canvas), ready: t.ready, problems: t.problems };
     }
     function cloneCanvas(c) {
         if (!c.getContext) return c.cloneNode(true);
@@ -3572,19 +3789,80 @@ if (typeof module !== "undefined") { module.exports = H3; }
         var d = new Date(iso); if (isNaN(d)) return "";
         return d.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     }
-    /** Who saved it, as this viewer sees them. Ids are resolved every render (names are never stored). */
+    /** Who saved it. claude.ai stores person ids (names resolved each render, never stored); GitHub stores the name
+     *  the person gave when they connected. */
     function repoWho(id, source) {
         if (!id) return source === "seed" ? "Claude (sample)" : "someone";
         if (id === REPO.me) return "you";
+        if (REPO.kind === "github") return id;
         return REPO.names[id] || "someone";
     }
-    function repoResolveNames(ids) {
-        if (!REPO.user || !ids.length) return;
-        REPO.user.profiles(ids).then(function (ps) {
-            var changed = false;
-            ids.forEach(function (i) { var nm = (ps[i] && ps[i].name) || ""; if (nm && REPO.names[i] !== nm) { REPO.names[i] = nm; changed = true; } });
-            if (changed && REPO.redraw) REPO.redraw();
-        });
+    /** Download a file: the claude.ai downloads capability when there is one, otherwise an ordinary browser download. */
+    function repoDownload(filename, data) {
+        if (REPO.downloads) return REPO.downloads.save({ filename: filename, data: data });
+        try {
+            var a = document.createElement("a"), url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+            a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+            return Promise.resolve({ status: "saved" });
+        } catch (e) { return Promise.reject({ code: "unavailable", message: String(e) }); }
+    }
+    /** Connect this browser to the GitHub label repository (the public website and the HTML file). */
+    function repoConnectForm(onDone) {
+        var cfg = ghConfigRead() || {};
+        var box = h("div", { class: "repoconnect" });
+        var repoIn = h("input", { class: "inp mono", id: "gh-repo", value: cfg.repo || GH_DEFAULT_REPO, autocomplete: "off", spellcheck: "false" });
+        var tokIn = h("input", { class: "inp mono", id: "gh-token", type: "password", value: "", placeholder: "github_pat_…", autocomplete: "off", spellcheck: "false" });
+        var nameIn = h("input", { class: "inp", id: "gh-name", value: cfg.name || "", maxlength: "40", placeholder: "e.g. Ryan H", autocomplete: "name" });
+        var remIn = h("input", { type: "checkbox", id: "gh-remember" }); remIn.checked = cfg.remember !== false;
+        var msg = h("div", { class: "hint", id: "gh-msg", text: REPO.error ? "Last try: " + REPO.error + "." : "" });
+        if (REPO.error) msg.className = "hint err";
+        var go = h("button", { class: "btn primary", type: "button", id: "gh-connect", text: "Connect", onclick: function () {
+            var c = { repo: repoIn.value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/+$/, ""),
+                      token: tokIn.value.trim(), name: nameIn.value.trim(), remember: remIn.checked };
+            if (!/^[\w.-]+\/[\w.-]+$/.test(c.repo)) { msg.className = "hint err"; msg.textContent = "Repository is owner/name, e.g. " + GH_DEFAULT_REPO + "."; return; }
+            if (!c.token) { msg.className = "hint err"; msg.textContent = "Paste the access token."; return; }
+            if (!c.name) { msg.className = "hint err"; msg.textContent = "Type your name: it goes on every label you save."; return; }
+            go.disabled = true; msg.className = "hint"; msg.textContent = "Connecting…";
+            ghConnect(c).then(function () {
+                ghConfigWrite(c, c.remember); REPO.error = "";
+                addLog("Connected to the label repository " + c.repo + " as " + c.name + ".");
+                toast("Connected to the label repository · " + REPO.list.length + (REPO.list.length === 1 ? " label" : " labels"));
+                if (onDone) onDone();
+            }, function (e) {
+                go.disabled = false; REPO.state = "setup"; REPO.B = null; REPO.error = ghErrText(e, c.repo);
+                msg.className = "hint err"; msg.textContent = "Couldn’t connect: " + REPO.error + ".";
+                repoChanged();
+            });
+        } });
+        box.appendChild(h("div", { class: "hint", text: "The team’s labels are kept in a private GitHub repository. Connect this browser once with the repository’s access token; your name goes on every label you save." }));
+        box.appendChild(h("div", { class: "repoform" }, [
+            sec("Repository", null, [repoIn]),
+            sec("Access token", "from Ryan", [tokIn]),
+            sec("Your name", null, [nameIn])
+        ]));
+        box.appendChild(h("label", { class: "toggle" }, [remIn, "Remember on this device (leave off on a shared computer)"]));
+        box.appendChild(h("div", { class: "row" }, [go]));
+        box.appendChild(msg);
+        box.appendChild(h("details", { class: "repohelp" }, [h("summary", { text: "Making the token (Ryan, once)" }),
+            h("ol", {}, [
+                h("li", { text: "On GitHub: Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token." }),
+                h("li", { text: "Repository access: Only select repositories → " + GH_DEFAULT_REPO.split("/")[1] + "." }),
+                h("li", { text: "Permissions → Repository permissions → Contents: Read and write. Nothing else." }),
+                h("li", { text: "Pick an expiry (up to a year), generate, and send the token to the team privately. Make a second one with Contents: Read-only for people who should only look." }),
+                h("li", { text: "If a token leaks, delete it on GitHub and make a new one; the labels stay." })
+            ]),
+            h("div", { class: "hint", text: "The token is kept only in this browser and sent only to GitHub. It never goes into a label file or an export." })]));
+        return box;
+    }
+    function repoSignOut() {
+        if (REPO.B && REPO.B.stop) REPO.B.stop();
+        ghConfigClear();
+        REPO.B = null; REPO.state = "setup"; REPO.list = []; REPO.byId = {}; REPO.me = null; REPO.myName = ""; REPO.canWrite = null; REPO.error = "";
+        S.repoId = null; S.repoRev = 0;
+        addLog("Disconnected this browser from the label repository.");
+        toast("Disconnected. The token was removed from this browser.");
+        repoChanged();
     }
     /** The repository section of the Label library dialog. */
     function repoSection(dlg) {
@@ -3595,6 +3873,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         var list = h("div", { class: "cards", id: "repo-cards" });
         var head = h("div", { class: "repohead" });
         var tools = h("div", { class: "repotools" });
+        var form = null;
         function matches(e) {
             var d = e.data;
             if (!!d.archived !== ui.archived) return false;
@@ -3611,8 +3890,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
             var d = e.data, th = repoThumb(e);
             var archiveBtn = h("button", { class: "btn small ghost", type: "button", text: d.archived ? "Restore" : "Archive" });
             archiveBtn.addEventListener("click", function () {
-                if (d.archived) { repoSetArchived(e, false); return; }
-                if (archiveBtn.dataset.sure) { repoSetArchived(e, true); return; }
+                if (d.archived) { archiveBtn.disabled = true; repoSetArchived(e, false); return; }
+                if (archiveBtn.dataset.sure) { archiveBtn.disabled = true; repoSetArchived(e, true); return; }
                 archiveBtn.dataset.sure = "1"; archiveBtn.textContent = "Archive it?"; archiveBtn.classList.add("warnbtn");
                 setTimeout(function () { if (archiveBtn.isConnected) { delete archiveBtn.dataset.sure; archiveBtn.textContent = "Archive"; archiveBtn.classList.remove("warnbtn"); } }, 4000);
             });
@@ -3635,28 +3914,45 @@ if (typeof module !== "undefined") { module.exports = H3; }
             head.innerHTML = ""; tools.innerHTML = ""; list.innerHTML = "";
             var active = REPO.list.filter(function (e) { return !e.data.archived; }).length, arch = REPO.list.length - active;
             head.appendChild(h("h3", { text: "Label repository" + (REPO.state === "on" ? " · " + active + (active === 1 ? " label" : " labels") : "") }));
-            if (REPO.state === "connecting") { head.appendChild(h("div", { class: "hint", text: "Connecting to the shared label repository…" })); return; }
-            if (REPO.state === "off") { head.appendChild(h("div", { class: "hint err", text: "The shared label repository isn’t available right now. Save keeps labels in this browser." })); return; }
-            head.appendChild(h("div", { class: "hint", text: "Every label saved here is shared with everyone who can open this simulator, with its full history. " +
-                (REPO.canWrite === false ? "You can open and copy them; ask the owner for Contributor access to save here." : "Save adds a new revision; nothing is lost.") }));
+            if (REPO.state === "connecting") { head.appendChild(h("div", { class: "hint", text: "Connecting to the label repository…" })); return; }
+            if (REPO.state === "setup") {
+                if (!form || !form.isConnected) form = repoConnectForm(function () { form = null; draw(); });
+                head.appendChild(form);
+                return;
+            }
+            form = null;
+            if (REPO.state === "off") { head.appendChild(h("div", { class: "hint err", text: "The label repository isn’t available right now. Save keeps labels in this browser." })); return; }
+            var where = REPO.kind === "github" ? "Shared with everyone who has the repository token, with its full history (on GitHub). " :
+                "Every label saved here is shared with everyone who can open this simulator, with its full history. ";
+            head.appendChild(h("div", { class: "hint", text: where + (REPO.canWrite === false ? "You can open and copy them; saving needs " +
+                (REPO.kind === "github" ? "a token with Contents: Read and write." : "Contributor access from the owner.") : "Save adds a new revision; nothing is lost.") }));
             tools.appendChild(q);
             tools.appendChild(seg([{ value: "all", label: "All" }, { value: "qr", label: "QR" }, { value: "databar", label: "DataBar" }, { value: "other", label: "Other barcodes" }],
                 ui.kind, function (v) { ui.kind = v; draw(); }));
             var tg = h("label", { class: "toggle" }, [h("input", { type: "checkbox", id: "repo-archived", onchange: function (ev) { ui.archived = ev.target.checked; draw(); } }), "Archived (" + arch + ")"]);
             if (ui.archived) tg.querySelector("input").checked = true;
             tools.appendChild(tg);
-            if (REPO.downloads) tools.appendChild(h("button", { class: "btn small", type: "button", id: "repo-export", html: icon("export") + "Export all", onclick: repoExport }));
+            tools.appendChild(h("button", { class: "btn small", type: "button", id: "repo-export", html: icon("export") + "Export all", onclick: repoExport }));
+            if (REPO.kind === "github") {
+                tools.appendChild(h("button", { class: "btn small ghost", type: "button", id: "repo-refresh", text: "Refresh", onclick: function () { REPO.B.refresh(); } }));
+                tools.appendChild(h("span", { class: "hint", text: "as " + (REPO.myName || "?") }));
+                tools.appendChild(h("button", { class: "btn small ghost", type: "button", id: "repo-signout", text: "Disconnect", onclick: repoSignOut }));
+            }
             var shown = REPO.list.filter(matches);
-            var ids = [];
-            shown.forEach(function (e) { if (e.data.savedBy && ids.indexOf(e.data.savedBy) < 0) ids.push(e.data.savedBy); });
-            repoResolveNames(ids);
+            if (REPO.B && REPO.B.resolveNames) {
+                var ids = [];
+                shown.forEach(function (e) { if (e.data.savedBy && ids.indexOf(e.data.savedBy) < 0) ids.push(e.data.savedBy); });
+                REPO.B.resolveNames(ids, function () { if (REPO.redraw) REPO.redraw(); });
+            }
             if (!shown.length) list.appendChild(h("div", { class: "hint", text: REPO.list.length ? "No label matches." : "No labels yet. Make a label and press Save: it lands here for the whole team." }));
             shown.forEach(function (e) { list.appendChild(card(e)); });
         }
         wrap.appendChild(head); wrap.appendChild(tools); wrap.appendChild(list);
         draw();
+        if (REPO.kind === "github" && REPO.state === "on" && REPO.B) REPO.B.refresh();
         REPO.redraw = function () {
             if (!wrap.isConnected) { REPO.redraw = null; return; }
+            if (REPO.state === "setup" && form && form.isConnected) return;   // don't wipe what someone is typing
             var f = document.activeElement === q;
             draw();
             if (f) { q.focus(); }
@@ -3666,32 +3962,36 @@ if (typeof module !== "undefined") { module.exports = H3; }
     function repoHistory(entry) {
         var body = h("div", { class: "sec" }, [h("div", { class: "hint", text: "Loading the history…" })]);
         openDialog("History · " + (entry.data.name || "label"), [body], [h("button", { class: "btn", type: "button", text: "Back to the library", onclick: openLibrary })], true);
-        REPO.db.collection("labels/" + entry.id + "/revisions").orderBy("rev", "desc").get().then(function (snap) {
-            body.innerHTML = "";
-            var revs = snap.docs.filter(function (d) { return d.exists; }).map(function (d) { return d.data(); });
-            var ids = []; revs.forEach(function (r) { if (r.savedBy && ids.indexOf(r.savedBy) < 0) ids.push(r.savedBy); });
+        REPO.B.history(entry).then(function (revs) {
             function rows() {
                 body.innerHTML = "";
-                body.appendChild(h("div", { class: "hint", text: revs.length + (revs.length === 1 ? " revision" : " revisions") + ". Opening an older one and saving it makes it the current revision; the newer ones stay in the history." }));
+                body.appendChild(h("div", { class: "hint", text: revs.length + (revs.length === 1 ? " change" : " changes") + ", newest first. Opening an older revision and saving it makes it the current one; the newer ones stay in the history." }));
                 revs.forEach(function (r) {
-                    var cur = r.rev === entry.data.rev;
+                    var btn = h("button", { class: "btn small", type: "button", text: "Open" });
+                    btn.addEventListener("click", function () {
+                        if (r.current) { repoOpen(entry); return; }
+                        btn.disabled = true; btn.textContent = "Opening…";
+                        r.load().then(function (file) { repoOpen(entry, file, (r.rev ? "rev " + r.rev : r.title.toLowerCase()) + " of " + (entry.data.rev || 1)); },
+                            function (e) { btn.disabled = false; btn.textContent = "Open"; toast("Couldn’t open it: " + REPO.B.errText(e) + ".", true); });
+                    });
                     body.appendChild(h("div", { class: "revrow" }, [
-                        h("div", {}, [h("b", { text: "Rev " + r.rev + (cur ? " (current)" : "") }), h("div", { class: "hint", text: fmtWhen(r.savedAt) + " · " + repoWho(r.savedBy, entry.data.source) +
-                            " · " + ((r.file && r.file.elements) ? r.file.elements.length : 0) + " items" })]),
-                        h("button", { class: "btn small", type: "button", text: "Open", onclick: function () { repoOpen(entry, cur ? null : r.file, cur ? null : "rev " + r.rev + " of " + entry.data.rev); } })
+                        h("div", {}, [h("b", { text: r.title + (r.current ? " (current)" : "") }), h("div", { class: "hint", text: fmtWhen(r.savedAt) + " · " + repoWho(r.savedBy, entry.data.source) +
+                            (r.items !== null && r.items !== undefined ? " · " + r.items + " items" : "") })]),
+                        btn
                     ]));
                 });
             }
             rows();
-            if (REPO.user && ids.length) REPO.user.profiles(ids).then(function (ps) { ids.forEach(function (i) { if (ps[i] && ps[i].name) REPO.names[i] = ps[i].name; }); rows(); });
-        }, function (e) { body.innerHTML = ""; body.appendChild(h("div", { class: "hint err", text: "Couldn’t load the history (" + ((e && e.code) || "error") + ")." })); });
+            var ids = []; revs.forEach(function (r) { if (r.savedBy && ids.indexOf(r.savedBy) < 0) ids.push(r.savedBy); });
+            if (REPO.B.resolveNames) REPO.B.resolveNames(ids, rows);
+        }, function (e) { body.innerHTML = ""; body.appendChild(h("div", { class: "hint err", text: "Couldn’t load the history (" + REPO.B.errText(e) + ")." })); });
     }
     /** Every label in the repository (latest revisions, archived included and marked) as one JSON file, for H3 and backups. */
     function repoExport() {
         var out = { format: "h3-label-repository", version: 1, exported: new Date().toISOString(),
                     labels: REPO.list.map(function (e) { return { id: e.id, rev: e.data.rev || 1, savedAt: e.data.savedAt || "", archived: !!e.data.archived, file: e.data.file }; }) };
         var d = new Date(), stamp = d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
-        REPO.downloads.save({ filename: "H3 label repository " + stamp + ".json", data: JSON.stringify(out, null, 1) }).then(function () {
+        repoDownload("H3 label repository " + stamp + ".json", JSON.stringify(out, null, 1)).then(function () {
             addLog("Exported the label repository (" + out.labels.length + " labels)."); toast("Exported " + out.labels.length + " labels");
         }, function (e) { if (e && e.code !== "declined") toast("Couldn’t export: " + e.code + ".", true); });
     }
@@ -5396,10 +5696,10 @@ if (typeof module !== "undefined") { module.exports = H3; }
                 h("div", { class: "sec" }, [h("div", { class: "lbl" }, ["Label file (JSON)", h("span", { class: "v", text: "format h3-label v2: what H3 stores and C# reads" })]), ta,
                     h("div", { class: "row", style: "flex-wrap:wrap" }, [
                         h("button", { class: "btn small", type: "button", text: "Copy", onclick: function () { copyText(ta); } }),
-                        REPO.downloads ? h("button", { class: "btn small", type: "button", text: "Download", onclick: function () {
-                            REPO.downloads.save({ filename: (S.doc.name || "label").replace(/[\\/:*?"<>|]+/g, " ").trim() + ".json", data: json }).then(function () { toast("Label file downloaded"); },
+                        h("button", { class: "btn small", type: "button", text: "Download", onclick: function () {
+                            repoDownload((S.doc.name || "label").replace(/[\\/:*?"<>|]+/g, " ").trim() + ".json", json).then(function () { toast("Label file downloaded"); },
                                 function (e) { if (e && e.code !== "declined") toast("Couldn’t download: " + e.code + ".", true); });
-                        } }) : null,
+                        } }),
                         file,
                         h("button", { class: "btn small primary", type: "button", text: "Open this label", onclick: function () {
                             try { var d = Core.parseDocument(ta.value, S.eng); loadDoc(d); S.dirty = true; S.repoId = null; S.repoRev = 0; addLog("Imported label “" + d.name + "”."); closeDialog(); refresh(true); }
