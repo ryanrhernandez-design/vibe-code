@@ -303,6 +303,9 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
 .repohelp { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .repohelp summary { cursor: pointer; font-weight: 600; }
 .repohelp ol { margin: 6px 0 6px 18px; padding: 0; }
+.repostep { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.btn.big { min-height: 46px; padding: 10px 20px; font-size: 15px; }
+#inv-link { width: 100%; box-sizing: border-box; font-size: 11.5px; height: 64px; min-height: 0; resize: none; }
 
 </style>
 </head>
@@ -394,7 +397,7 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
     <button class="btn" id="btnLang" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>English</button>
     <button class="btn" id="btnExit" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>Exit</button>
   </nav>
-  <div class="foot"><span>Label Editor simulator rev F &middot; DRAFT 2026-10-05 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; whole print dots</span></div>
+  <div class="foot"><span>Label Editor simulator rev G &middot; DRAFT 2026-10-05 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; whole print dots</span></div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -3193,7 +3196,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Editor simulator - user interface (browser only).
- * DRAFT - Hurst International, rev F, 2026-10-05 (rev E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
+ * DRAFT - Hurst International, rev G, 2026-10-05 (revs F, E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
  *
  * The UI only calls H3.Core / H3.Gs1 / H3.DataBar / H3.Qr (the portable core). In H3 this layer is rebuilt
  * in the C# UI toolkit; the behaviour (flows, prompts, fixes, lane simulation) is described in the port guide.
@@ -3446,6 +3449,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
     var REPO = { kind: "", state: "off", B: null, me: null, myName: "", canWrite: null, list: [], byId: {}, thumbs: {}, names: {},
                  error: "", redraw: null, downloads: null, hinted: false };
     var GH_KEY = "h3-label-repo-github-v1", GH_DEFAULT_REPO = "ryanrhernandez-design/h3-label-repository";
+    var PUBLIC_URL = "https://ryanrhernandez-design.github.io/vibe-code/h3-label-editor/";
 
     function repoConnect() {
         var c = window.claude;
@@ -3548,8 +3552,48 @@ if (typeof module !== "undefined") { module.exports = H3; }
         try { localStorage.removeItem(GH_KEY); sessionStorage.removeItem(GH_KEY); (remember ? localStorage : sessionStorage).setItem(GH_KEY, JSON.stringify(cfg)); } catch (e) { }
     }
     function ghConfigClear() { try { localStorage.removeItem(GH_KEY); sessionStorage.removeItem(GH_KEY); } catch (e) { } }
+    /** A setup link (#team=<token>[&name=<name>][&repo=<owner/name>]) connects this computer in one click. The part
+     *  after # never leaves the browser; the page removes it from the address bar straight away. */
+    function ghReadSetupLink() {
+        var hsh = String(location.hash || "");
+        if (hsh.indexOf("team=") < 0) return null;
+        var out = {};
+        hsh.replace(/^#/, "").split("&").forEach(function (kv) {
+            var i = kv.indexOf("="); if (i < 0) return;
+            try { out[kv.substring(0, i)] = decodeURIComponent(kv.substring(i + 1).replace(/\+/g, " ")); } catch (e) { }
+        });
+        try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { location.hash = ""; }
+        if (!out.team) return null;
+        return { token: out.team.replace(/\s+/g, ""), name: (out.name || "").trim().substring(0, 40), repo: out.repo || GH_DEFAULT_REPO };
+    }
+    function ghSetupLink(cfg, name) {
+        return PUBLIC_URL + "#team=" + encodeURIComponent(cfg.token) + (name ? "&name=" + encodeURIComponent(name) : "") +
+               (cfg.repo && cfg.repo !== GH_DEFAULT_REPO ? "&repo=" + encodeURIComponent(cfg.repo) : "");
+    }
     function ghStartFromConfig() {
         REPO.kind = "github"; REPO.B = null; REPO.list = []; REPO.byId = {};
+        var link = ghReadSetupLink();
+        if (link) {
+            REPO.pending = link;
+            if (link.name) {
+                var c = { repo: link.repo, token: link.token, name: link.name, remember: true };
+                ghConnect(c).then(function () {
+                    ghConfigWrite(c, true); REPO.pending = null; REPO.error = "";
+                    addLog("Connected to the label repository from a setup link, as " + c.name + ".");
+                    setTimeout(function () { repoWelcome(c.name); }, 300);
+                }, function (e) {
+                    REPO.state = "setup"; REPO.B = null; REPO.error = ghErrText(e, c.repo);
+                    REPO.pending = { token: "", name: link.name, repo: link.repo, failed: true };   // keep the name; a new code can be pasted
+                    addLog("Setup link didn’t work (" + REPO.error + ").");
+                    setTimeout(function () { openLibrary(); }, 300);
+                    repoChanged();
+                });
+                return;
+            }
+            REPO.state = "setup"; repoChanged();
+            setTimeout(function () { openLibrary(); }, 300);   // the link is in: just the name to type
+            return;
+        }
         var cfg = ghConfigRead();
         if (!cfg || !cfg.token || !cfg.repo) { REPO.state = "setup"; repoChanged(); return; }
         ghConnect(cfg).catch(function (e) {
@@ -3560,9 +3604,9 @@ if (typeof module !== "undefined") { module.exports = H3; }
     }
     function ghErrText(e, repo) {
         var st = e && e.status;
-        if (st === 401) return "the token was refused (expired or mistyped)";
-        if (st === 403) return "the token isn’t allowed to do that" + (e.message && /rate limit/i.test(e.message) ? " (GitHub rate limit; try again in a few minutes)" : "");
-        if (st === 404) return "no repository " + repo + " for this token (check the name, and that the token includes it)";
+        if (st === 401) return "the team code was refused (it may have expired, been replaced, or been copied only in part)";
+        if (st === 403) return "the team code isn’t allowed to do that" + (e.message && /rate limit/i.test(e.message) ? " (GitHub rate limit; try again in a few minutes)" : "");
+        if (st === 404) return "the team code doesn’t include the repository " + repo + " (Ryan: check the code’s repository access)";
         if (st === 0) return "GitHub can’t be reached from this network";
         return (e && e.message) || "error";
     }
@@ -3571,7 +3615,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         REPO.kind = "github"; REPO.state = "connecting"; repoChanged();
         var B = githubBackend(cfg);
         return B.check().then(function (info) {
-            REPO.B = B; REPO.me = cfg.name || info.login; REPO.myName = cfg.name || info.login;
+            REPO.B = B; REPO.cfg = cfg; REPO.me = cfg.name || info.login; REPO.myName = cfg.name || info.login;
             REPO.canWrite = info.push ? null : false;     // a token's own Contents permission shows only when a save is tried
             REPO.thumbs = {};
             return B.start();
@@ -3624,7 +3668,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         }
         function remember(id, sha, data) { blobs[sha] = data; repoUpsert({ id: id, sha: sha, data: data }); }
         var B = {
-            where: "everyone with the label repository token",
+            where: "everyone on the team who is connected",
             check: function () {
                 return api("GET", "/repos/" + repo).then(function (r) {
                     branch = r.json.default_branch || "main";
@@ -3691,7 +3735,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             denied: function (e) { return e && e.status === 403 && !/rate limit/i.test(e.message || ""); },
             full: function () { return false; },
             errText: function (e) { return ghErrText(e, repo); },
-            deniedText: "This token can read the label repository but not save to it (it needs Contents: Read and write). Saved in this browser instead."
+            deniedText: "This computer can look at the team’s labels but not save to them. Saved in this browser instead. To save for the team, ask Ryan for a setup link that can save (team code with Contents: Read and write)."
         };
         return B;
     }
@@ -3807,61 +3851,106 @@ if (typeof module !== "undefined") { module.exports = H3; }
             return Promise.resolve({ status: "saved" });
         } catch (e) { return Promise.reject({ code: "unavailable", message: String(e) }); }
     }
-    /** Connect this browser to the GitHub label repository (the public website and the HTML file). */
+    /** Connect this browser to the GitHub label repository (the public website and the HTML file). Written for people
+     *  who don't use GitHub: a setup link fills everything in; otherwise they paste the team code Ryan sends them. */
     function repoConnectForm(onDone) {
-        var cfg = ghConfigRead() || {};
+        var cfg = ghConfigRead() || {}, link = REPO.pending || null;
         var box = h("div", { class: "repoconnect" });
-        var repoIn = h("input", { class: "inp mono", id: "gh-repo", value: cfg.repo || GH_DEFAULT_REPO, autocomplete: "off", spellcheck: "false" });
-        var tokIn = h("input", { class: "inp mono", id: "gh-token", type: "password", value: "", placeholder: "github_pat_…", autocomplete: "off", spellcheck: "false" });
-        var nameIn = h("input", { class: "inp", id: "gh-name", value: cfg.name || "", maxlength: "40", placeholder: "e.g. Ryan H", autocomplete: "name" });
+        var repoIn = h("input", { class: "inp mono", id: "gh-repo", value: (link && link.repo) || cfg.repo || GH_DEFAULT_REPO, autocomplete: "off", spellcheck: "false" });
+        var tokIn = h("input", { class: "inp mono", id: "gh-token", type: "password", value: "", placeholder: "Paste the team code from Ryan (it starts github_pat_)", autocomplete: "off", spellcheck: "false" });
+        var nameIn = h("input", { class: "inp", id: "gh-name", value: (link && link.name) || cfg.name || "", maxlength: "40", placeholder: "Your name, e.g. Juan", autocomplete: "name" });
         var remIn = h("input", { type: "checkbox", id: "gh-remember" }); remIn.checked = cfg.remember !== false;
-        var msg = h("div", { class: "hint", id: "gh-msg", text: REPO.error ? "Last try: " + REPO.error + "." : "" });
+        var msg = h("div", { class: "hint", id: "gh-msg", text: REPO.error ? (link ? "This setup link didn’t work: " : "Last try: ") + REPO.error + "." + (link ? " Ask Ryan for a new link." : "") : "" });
+        var hasLink = !!(link && link.token);
         if (REPO.error) msg.className = "hint err";
-        var go = h("button", { class: "btn primary", type: "button", id: "gh-connect", text: "Connect", onclick: function () {
+        // pasting a whole setup link (or a code with spaces / line breaks) into the box still works
+        tokIn.addEventListener("input", function () {
+            var v = tokIn.value;
+            if (/#team=/.test(v)) {
+                var m = /#team=([^&\s]+)/.exec(v), n = /[&#]name=([^&\s]+)/.exec(v);
+                try { tokIn.value = decodeURIComponent(m[1]); if (n && !nameIn.value) nameIn.value = decodeURIComponent(n[1].replace(/\+/g, " ")); } catch (e) { }
+            } else if (/\s/.test(v)) tokIn.value = v.replace(/\s+/g, "");
+        });
+        var go = h("button", { class: "btn primary big", type: "button", id: "gh-connect", text: "Connect this computer", onclick: function () {
             var c = { repo: repoIn.value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/+$/, ""),
-                      token: tokIn.value.trim(), name: nameIn.value.trim(), remember: remIn.checked };
+                      token: hasLink ? link.token : tokIn.value.replace(/\s+/g, ""), name: nameIn.value.trim(), remember: remIn.checked };
             if (!/^[\w.-]+\/[\w.-]+$/.test(c.repo)) { msg.className = "hint err"; msg.textContent = "Repository is owner/name, e.g. " + GH_DEFAULT_REPO + "."; return; }
-            if (!c.token) { msg.className = "hint err"; msg.textContent = "Paste the access token."; return; }
-            if (!c.name) { msg.className = "hint err"; msg.textContent = "Type your name: it goes on every label you save."; return; }
+            if (!c.token) { msg.className = "hint err"; msg.textContent = "Paste the team code from Ryan into the box above."; tokIn.focus(); return; }
+            if (!/^(github_pat_|ghp_|gho_|ghu_)[A-Za-z0-9_]+$/.test(c.token)) { msg.className = "hint err"; msg.textContent = "That doesn’t look like the team code. It starts with github_pat_ — copy the whole thing from Ryan’s message."; tokIn.focus(); return; }
+            if (!c.name) { msg.className = "hint err"; msg.textContent = "Type your name: it goes on every label you save."; nameIn.focus(); return; }
             go.disabled = true; msg.className = "hint"; msg.textContent = "Connecting…";
             ghConnect(c).then(function () {
-                ghConfigWrite(c, c.remember); REPO.error = "";
+                ghConfigWrite(c, c.remember); REPO.error = ""; REPO.pending = null;
                 addLog("Connected to the label repository " + c.repo + " as " + c.name + ".");
-                toast("Connected to the label repository · " + REPO.list.length + (REPO.list.length === 1 ? " label" : " labels"));
+                toast("Connected · " + REPO.list.length + (REPO.list.length === 1 ? " label" : " labels") + " in the team repository");
                 if (onDone) onDone();
             }, function (e) {
                 go.disabled = false; REPO.state = "setup"; REPO.B = null; REPO.error = ghErrText(e, c.repo);
-                msg.className = "hint err"; msg.textContent = "Couldn’t connect: " + REPO.error + ".";
+                msg.className = "hint err"; msg.textContent = "Couldn’t connect: " + REPO.error + "." + (e && e.status === 401 ? " Check you copied the whole code, or ask Ryan for a new one." : "");
                 repoChanged();
             });
         } });
-        box.appendChild(h("div", { class: "hint", text: "The team’s labels are kept in a private GitHub repository. Connect this browser once with the repository’s access token; your name goes on every label you save." }));
+        box.appendChild(h("div", { class: "repostep" }, [h("b", { text: "Connect this computer to the team’s labels." }),
+            h("div", { class: "hint", text: hasLink ? "The setup link is in. Type your name and press Connect — that’s all, once per computer." :
+                "Do this once per computer. The easiest way: open the setup link Ryan sent you. Or paste the team code here." })]));
         box.appendChild(h("div", { class: "repoform" }, [
-            sec("Repository", null, [repoIn]),
-            sec("Access token", "from Ryan", [tokIn]),
+            hasLink ? h("div", { class: "hint ok", id: "gh-linkok", text: "✓ Setup link received" }) : sec("Team code", "from Ryan", [tokIn]),
             sec("Your name", null, [nameIn])
         ]));
-        box.appendChild(h("label", { class: "toggle" }, [remIn, "Remember on this device (leave off on a shared computer)"]));
+        box.appendChild(h("label", { class: "toggle" }, [remIn, "Remember on this computer (untick on a computer other people use)"]));
         box.appendChild(h("div", { class: "row" }, [go]));
         box.appendChild(msg);
-        box.appendChild(h("details", { class: "repohelp" }, [h("summary", { text: "Making the token (Ryan, once)" }),
+        box.appendChild(h("details", { class: "repohelp" }, [h("summary", { text: "For Ryan: making the team code" }),
             h("ol", {}, [
                 h("li", { text: "On GitHub: Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token." }),
                 h("li", { text: "Repository access: Only select repositories → " + GH_DEFAULT_REPO.split("/")[1] + "." }),
                 h("li", { text: "Permissions → Repository permissions → Contents: Read and write. Nothing else." }),
-                h("li", { text: "Pick an expiry (up to a year), generate, and send the token to the team privately. Make a second one with Contents: Read-only for people who should only look." }),
-                h("li", { text: "If a token leaks, delete it on GitHub and make a new one; the labels stay." })
+                h("li", { text: "Pick an expiry (up to a year) and generate. Connect here with it, then use Invite someone to send each person a setup link." }),
+                h("li", { text: "If the code leaks, delete it on GitHub and make a new one; the labels stay." })
             ]),
-            h("div", { class: "hint", text: "The token is kept only in this browser and sent only to GitHub. It never goes into a label file or an export." })]));
+            h("div", { class: "hint", text: "The code is kept only in this browser and sent only to GitHub. It never goes into a label file or an export." }),
+            h("div", { class: "lbl", style: "margin-top:8px", text: "Repository" }), repoIn]));
+        if (hasLink) setTimeout(function () { if (nameIn.isConnected) nameIn.focus(); }, 60);
         return box;
+    }
+    /** After a setup link connected this computer: a plain welcome, then the labels. */
+    function repoWelcome(name) {
+        openDialog("This computer is connected", [h("div", { class: "sec" }, [
+            h("div", { class: "hint ok", text: "✓ Connected to the team’s labels as " + name + "." }),
+            h("div", { class: "hint", text: "Press Save on any label and the whole team gets it, with every version kept. Your labels are in Label library → Label repository." })
+        ])], [h("span", { class: "sp" }), h("button", { class: "btn primary", type: "button", id: "welcome-open", text: "Show the labels", onclick: openLibrary })], true);
+    }
+    /** Make a setup link for one person (Ryan sends it by text or email). */
+    function repoInvite() {
+        var nameIn = h("input", { class: "inp", id: "inv-name", maxlength: "40", placeholder: "e.g. Juan", autocomplete: "off" });
+        var out = h("textarea", { class: "inp mono", id: "inv-link", rows: "3", readonly: true, spellcheck: "false" });
+        var note = h("div", { class: "hint", id: "inv-msg" });
+        function make() { out.value = ghSetupLink(REPO.cfg, nameIn.value.trim()); }
+        nameIn.addEventListener("input", make);
+        make();
+        openDialog("Invite someone", [h("div", { class: "sec" }, [
+            h("div", { class: "hint", text: "Make a setup link for one person. When they open it, their computer connects to the team’s labels with their name — nothing to type." }),
+            sec("Their name", "goes on the labels they save", [nameIn]),
+            sec("Setup link", null, [out]),
+            h("div", { class: "hint err", text: "Anyone with this link can save labels. Send it only to that person (text or email), not in a group chat." }),
+            note
+        ])], [h("button", { class: "btn", type: "button", text: "Back", onclick: openLibrary }), h("span", { class: "sp" }),
+              h("button", { class: "btn primary", type: "button", id: "inv-copy", text: "Copy link", onclick: function () {
+                  make();
+                  var done = function () { note.className = "hint ok"; note.textContent = "✓ Copied. Paste it into a text or email to " + (nameIn.value.trim() || "them") + "."; };
+                  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(out.value).then(done, function () { copyText(out); done(); });
+                  else { copyText(out); done(); }
+              } })], true);
+        setTimeout(function () { nameIn.focus(); }, 40);
     }
     function repoSignOut() {
         if (REPO.B && REPO.B.stop) REPO.B.stop();
         ghConfigClear();
         REPO.B = null; REPO.state = "setup"; REPO.list = []; REPO.byId = {}; REPO.me = null; REPO.myName = ""; REPO.canWrite = null; REPO.error = "";
+        REPO.cfg = null; REPO.pending = null;
         S.repoId = null; S.repoRev = 0;
         addLog("Disconnected this browser from the label repository.");
-        toast("Disconnected. The token was removed from this browser.");
+        toast("Disconnected. The team code was removed from this browser.");
         repoChanged();
     }
     /** The repository section of the Label library dialog. */
@@ -3922,10 +4011,10 @@ if (typeof module !== "undefined") { module.exports = H3; }
             }
             form = null;
             if (REPO.state === "off") { head.appendChild(h("div", { class: "hint err", text: "The label repository isn’t available right now. Save keeps labels in this browser." })); return; }
-            var where = REPO.kind === "github" ? "Shared with everyone who has the repository token, with its full history (on GitHub). " :
+            var where = REPO.kind === "github" ? "Shared with the team. Every saved version is kept (on GitHub). " :
                 "Every label saved here is shared with everyone who can open this simulator, with its full history. ";
             head.appendChild(h("div", { class: "hint", text: where + (REPO.canWrite === false ? "You can open and copy them; saving needs " +
-                (REPO.kind === "github" ? "a token with Contents: Read and write." : "Contributor access from the owner.") : "Save adds a new revision; nothing is lost.") }));
+                (REPO.kind === "github" ? "a setup link from Ryan that can save." : "Contributor access from the owner.") : "Save adds a new revision; nothing is lost.") }));
             tools.appendChild(q);
             tools.appendChild(seg([{ value: "all", label: "All" }, { value: "qr", label: "QR" }, { value: "databar", label: "DataBar" }, { value: "other", label: "Other barcodes" }],
                 ui.kind, function (v) { ui.kind = v; draw(); }));
@@ -3935,6 +4024,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             tools.appendChild(h("button", { class: "btn small", type: "button", id: "repo-export", html: icon("export") + "Export all", onclick: repoExport }));
             if (REPO.kind === "github") {
                 tools.appendChild(h("button", { class: "btn small ghost", type: "button", id: "repo-refresh", text: "Refresh", onclick: function () { REPO.B.refresh(); } }));
+                if (REPO.canWrite !== false && REPO.cfg) tools.appendChild(h("button", { class: "btn small", type: "button", id: "repo-invite", text: "Invite someone", onclick: repoInvite }));
                 tools.appendChild(h("span", { class: "hint", text: "as " + (REPO.myName || "?") }));
                 tools.appendChild(h("button", { class: "btn small ghost", type: "button", id: "repo-signout", text: "Disconnect", onclick: repoSignOut }));
             }
