@@ -172,6 +172,8 @@ select.inp option { background: var(--raised); }
 .hint { color: var(--muted); font-size: 11.5px; line-height: 1.45; }
 .hint.ok { color: var(--ok); }
 .hint.err { color: var(--warn); }
+.btnrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.btnrow .btn { flex: 1 1 auto; justify-content: center; }
 .readout { font-family: var(--mono); font-size: 11.5px; color: var(--muted); background: var(--raised); border: 1px dashed var(--border); border-radius: 8px; padding: 6px 8px; word-break: break-all; }
 .nudge { display: grid; grid-template-columns: 44px 108px 44px; grid-template-rows: repeat(3, 44px); gap: 5px; justify-content: start; }
 .nudge .btn { min-height: 0; padding: 0; justify-content: center; }
@@ -397,7 +399,7 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
     <button class="btn" id="btnLang" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>English</button>
     <button class="btn" id="btnExit" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>Exit</button>
   </nav>
-  <div class="foot"><span>Label Editor simulator rev G &middot; DRAFT 2026-10-05 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; whole print dots</span></div>
+  <div class="foot"><span>Label Editor simulator rev H &middot; DRAFT 2026-10-07 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -1367,14 +1369,15 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Core - GS1 DataBar Omnidirectional and GS1 DataBar Stacked Omnidirectional encoder.
- * DRAFT - Hurst International, H3 Label Editor simulator rev A, 2026-09-29.
+ * DRAFT - Hurst International, H3 Label Editor simulator rev H, 2026-10-07 (rev A 2026-09-29).
  *
  * Algorithm: ISO/IEC 24724:2011 (GS1 DataBar). Tables and separator rules follow libzint's rss.c /
  * rss.h (BSD-3-Clause, Copyright (C) 2007-2025 Robin Stuart) - see NOTICE in THIRD-PARTY-NOTICES.txt.
  * The "getWidths" routine is from ISO/IEC 24724 Annex B.
  *
- * Output is a MODULE matrix (1 = bar/dark). The H3 renderer scales it by a whole number of printhead dots
- * (X) - never by a fraction - so every bar and space is an exact multiple of X dots.
+ * Output is a MODULE matrix (1 = bar/dark). The H3 renderer scales it by X printhead dots. X is a whole number,
+ * or (rev H, 10.07.26) a half dot such as 3.5: module i then spans dots round(i*X) .. round((i+1)*X), so modules
+ * alternate 3 and 4 dots - exactly how Hurst's Auvil DataBar (0.5831 x 0.1599 in = 175 x 48 dots) is built.
  *
  * Portable by design: integer arithmetic, fixed-size arrays. The only value above 2^31 is the GTIN value
  * (< 10^13): use a 64-bit integer (C# long). C# port: csharp/H3.LabelCore/DataBar.cs.
@@ -1588,18 +1591,32 @@ H3.DataBar = (function () {
     }
 
     /**
-     * Row heights in DOTS for a symbol drawn at module size xDots and total height heightDots.
-     * Separator rows are exactly 1X; data rows share the rest (top row gets the smaller half if odd).
-     * heightDots below the minimum is raised to the minimum.
+     * Height limits in DOTS for a symbol at module size xDots.
+     *   full  = the GS1 full height (33 X one row; 69 X stacked): what heightDots = 0 gives.
+     *   floor = the shortest allowed: cropMinX x X (rev H: GS1 DataBar truncated minimum 13 X). Without cropMinX = full.
+     * Separator rows are floor(xDots) dots each (3 dots at X = 3.5, as in the Auvil file).
      */
-    function rowHeightsDots(sym, xDots, heightDots) {
-        var minH = sym.minHeightX * xDots;
-        var h = Math.max(heightDots, minH);
+    function heightLimits(sym, xDots, cropMinX) {
+        var full = Math.round(sym.minHeightX * xDots);
+        var floor = cropMinX ? Math.ceil(cropMinX * xDots - 1e-9) : full;
+        return { full: full, floor: Math.min(floor, full) };
+    }
+
+    /**
+     * Row heights in DOTS for a symbol drawn at module size xDots and total height heightDots.
+     * heightDots = 0 means the GS1 full height. Separator rows are floor(xDots) each; data rows share the rest
+     * (top row gets the smaller half if odd). heightDots below the floor (see heightLimits) is raised to the floor.
+     * Rev H: with cropMinX the data rows can be cropped short (Hurst's crop DataBar); without it, the floor is the full height.
+     */
+    function rowHeightsDots(sym, xDots, heightDots, cropMinX) {
+        var lim = heightLimits(sym, xDots, cropMinX);
+        var h = heightDots > 0 ? Math.max(heightDots, lim.floor) : lim.full;
+        var sepH = Math.floor(xDots);
         var fixed = 0, stretchRows = 0, r;
         for (r = 0; r < sym.rows.length; r++) {
-            if (sym.rows[r].stretch) stretchRows++; else fixed += sym.rows[r].minHeightX * xDots;
+            if (sym.rows[r].stretch) stretchRows++; else fixed += sym.rows[r].minHeightX * sepH;
         }
-        var free = h - fixed;
+        var free = Math.max(stretchRows, h - fixed);
         var each = Math.floor(free / stretchRows);
         var extra = free - each * stretchRows;
         var out = [];
@@ -1609,13 +1626,16 @@ H3.DataBar = (function () {
                 seen++;
                 out.push(each + ((seen === stretchRows) ? extra : 0));
             } else {
-                out.push(sym.rows[r].minHeightX * xDots);
+                out.push(sym.rows[r].minHeightX * sepH);
             }
         }
         return out;
     }
 
-    return { encode: encode, encodeWidths: encodeWidths, rowHeightsDots: rowHeightsDots, getWidths: getWidths, combins: combins };
+    /** Dot where module column i starts, for module size xDots (whole or half dots). round-half-up, as JS Math.round. */
+    function moduleEdge(i, xDots) { return Math.floor(i * xDots + 0.5); }
+
+    return { encode: encode, encodeWidths: encodeWidths, rowHeightsDots: rowHeightsDots, heightLimits: heightLimits, moduleEdge: moduleEdge, getWidths: getWidths, combins: combins };
 })();
 
 if (typeof module !== "undefined") { module.exports = H3; }
@@ -2158,7 +2178,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Core - label model, engineering controls, placement rules, 1-bit renderer and checks.
- * DRAFT - Hurst International, H3 Label Editor simulator rev E, 2026-10-05 (revs D, C, B 2026-10-02, rev A 2026-09-29).
+ * DRAFT - Hurst International, H3 Label Editor simulator rev H, 2026-10-07 (revs E-G 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
  *
  * Everything here is UI-independent and deterministic, so it can be ported class-for-class to C#:
  *
@@ -2174,6 +2194,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
  *   parseDocument()/serialize()       LabelDocument JSON (format "h3-label", version 2; version 1 files still open)
  *
  * Units: every position and size is an INTEGER number of printhead dots (300 dpi: 1 dot = 0.0847 mm).
+ * One exception (rev H): a DataBar's bar width (xDots) may be a half dot (2.5, 3.5 ...); its modules then alternate
+ * between the two neighbouring whole-dot widths, and every printed bar and space is still whole dots.
  * Label coordinates: origin = top-left of the label's bounding box as the operator sees it; x across the
  * printhead, y along the feed. The top keepOut band (pre-printed logo) is never printed.
  */
@@ -2200,7 +2222,11 @@ H3.Core = (function () {
                                       // GS1 produce minimum X 0.203 mm is not met, and the engineering check says so
                 defaultXDots: 3,      // new DataBars start at 3 dots (meets GS1) and step down only when the label needs it
                 maxXDots: 6,
-                clearModules: 1       // H3 rule: keep 1 module clear around a DataBar
+                clearModules: 1,      // H3 rule: keep 1 module clear around a DataBar
+                // rev H (Ryan 10.07.26, Auvil file 0.5831 x 0.1599 in): Hurst prints DataBar cropped short.
+                halfDots: true,       // bar widths in half dots too: 3.5 dots = the Auvil 0.5831 in width (3 dots = the standard 0.4998 in)
+                cropMinX: 13,         // the shortest a DataBar can be: GS1 DataBar truncated minimum, 13 x bar width
+                smallestHeightIn: 0.1599 // the smallest DataBar Hurst prints (Auvil). Shorter is allowed only after a "not recommended" warning
             },
             linear: {                 // UPC-A, UPC-E, EAN-13, EAN-8, Code 128, GS1-128 (rev B)
                 retailMinXDots: 3,    // UPC/EAN. GS1 retail minimum is 0.264 mm = 4 dots; 3 dots (0.254 mm) is flagged in the checks
@@ -2632,11 +2658,39 @@ H3.Core = (function () {
     /** Smallest and largest bar width (dots) engineering allows for a symbology. */
     function xRange(sym, eng) {
         var f = symInfo(sym).family;
-        if (f === "databar") return { min: eng.databar.minXDots, max: eng.databar.maxXDots };
+        if (f === "databar") return { min: eng.databar.minXDots, max: eng.databar.maxXDots, step: eng.databar.halfDots === false ? 1 : 0.5 };
         var min = f === "retail" ? eng.linear.retailMinXDots : eng.linear.code128MinXDots;
         min = Math.max(min, eng.minLineDots);
-        return { min: min, max: Math.max(min, eng.linear.maxXDots) };
+        return { min: min, max: Math.max(min, eng.linear.maxXDots), step: 1 };
     }
+    /** Every bar width engineering allows for a symbology, smallest first (rev H: DataBar in half dots). */
+    function xValues(sym, eng) {
+        var r = xRange(sym, eng), b = xBounds(r), out = [];
+        for (var v = b.lo; v <= b.hi + 1e-6; v += r.step) out.push(Math.round(v * 2) / 2);
+        return out;
+    }
+    /** The smallest and largest bar widths on the step (whole or half dots) inside a range. */
+    function xBounds(r) {
+        var lo = Math.ceil(r.min / r.step - 1e-6) * r.step;
+        return { lo: lo, hi: Math.max(lo, Math.floor(r.max / r.step + 1e-6) * r.step) };
+    }
+    /**
+     * Clamp a bar width into its range, on its step (whole or half dots). Off-step values round DOWN onto the step,
+     * so a 3.5-dot DataBar opened where engineering allows whole dots only becomes 3 dots (never wider than designed).
+     */
+    function clampX(v, r) {
+        var b = xBounds(r);
+        v = +v;
+        if (!(v >= b.lo)) return b.lo;              // also NaN
+        v = Math.floor(v / r.step + 1e-6) * r.step;
+        return Math.min(b.hi, Math.max(b.lo, v));
+    }
+    /** The smallest DataBar Hurst prints, in dots (rev H: Auvil, 0.1599 in = 48 dots at 300 dpi). */
+    function smallestDataBarDots(eng) {
+        var inch = (eng.databar.smallestHeightIn != null) ? eng.databar.smallestHeightIn : 0.1599;
+        return Math.round(inch * eng.dpi);
+    }
+    function cropMinX(eng) { return eng.databar.cropMinX > 0 ? eng.databar.cropMinX : 13; }
     /** Smallest and largest QR module size (dots) engineering allows. */
     function qrModuleRange(eng) {
         var lo = Math.max(eng.minLineDots, eng.qr.minDotsPerModule || eng.qr.dotsPerModule);
@@ -2747,22 +2801,28 @@ H3.Core = (function () {
                     errors.push({ code: "data", text: gIn ? "Barcode number is not valid: " + g.message : "Type the barcode number (GTIN).", fix: { kind: "focus", field: "bcdata" } });
                 }
             }
-            var x = clampInt(el.xDots, eng.databar.minXDots, eng.databar.maxXDots);
+            var x = clampX(el.xDots, xRange(el.symbology, eng));
             var sym = H3.DataBar.encode(el.symbology, gtin14);
-            var heights = H3.DataBar.rowHeightsDots(sym, x, el.heightDots);
-            var symW = sym.widthModules * x, symH = 0;
+            var lim = H3.DataBar.heightLimits(sym, x, cropMinX(eng));
+            var heights = H3.DataBar.rowHeightsDots(sym, x, el.heightDots, cropMinX(eng));
+            var symW = H3.DataBar.moduleEdge(sym.widthModules, x), symH = 0;
             for (var r = 0; r < heights.length; r++) symH += heights[r];
-            var clear = eng.databar.clearModules * x;
+            var clear = Math.ceil(eng.databar.clearModules * x - 1e-9);
             ink = new Bitmap1(symW, symH);
             var yy = 0;
             for (r = 0; r < sym.rows.length; r++) {
                 var bits = sym.rows[r].bits;
-                for (var c = 0; c < bits.length; c++) if (bits[c]) ink.fillRect(c * x, yy, x, heights[r]);
+                for (var c = 0; c < bits.length; c++) {
+                    if (!bits[c]) continue;
+                    var x0 = H3.DataBar.moduleEdge(c, x), x1 = H3.DataBar.moduleEdge(c + 1, x);
+                    ink.fillRect(x0, yy, x1 - x0, heights[r]);
+                }
                 yy += heights[r];
             }
             inkX = clear; inkY = clear; w = symW + 2 * clear; h = symH + 2 * clear;
             info = { family: "databar", source: src, gtin14: gtin14, text: g.ok ? "(01)" + gtin14 : "", dataMessage: g.ok ? g.message : "",
-                     xDots: x, heightDots: symH, minHeightDots: sym.minHeightX * x, widthModules: sym.widthModules,
+                     xDots: x, heightDots: symH, minHeightDots: lim.floor, fullHeightDots: lim.full, smallestHeightDots: smallestDataBarDots(eng),
+                     cropped: symH < lim.full, widthModules: sym.widthModules,
                      symbolW: symW, symbolH: symH, clearDots: clear, rowHeights: heights, quietDots: clear };
         } else if (el.type === "barcode") {
             // UPC-A, UPC-E, EAN-13, EAN-8, Code 128, GS1-128
@@ -3037,12 +3097,19 @@ H3.Core = (function () {
             var t = items[i], el = t.el, inf = t.built.info, nm = elementName(el) + " " + el.id;
             if (el.type === "barcode") {
                 var xr = xRange(el.symbology, eng), xmm = dotsToMm(inf.xDots, eng);
-                check(nm, "Bar width is whole dots and >= minimum", inf.xDots >= xr.min && inf.xDots >= eng.minLineDots,
-                      "X = " + inf.xDots + " dots (" + xmm.toFixed(3) + " mm); minimum " + xr.min);
                 if (inf.family === "databar") {
+                    check(nm, "Bar width >= minimum, in whole or half dots", inf.xDots >= xr.min && Math.floor(inf.xDots) >= eng.minLineDots && Math.round(inf.xDots * 2) === inf.xDots * 2,
+                          "X = " + inf.xDots + " dots (" + xmm.toFixed(3) + " mm); minimum " + xr.min);
                     check(nm, "Bar width >= GS1 produce minimum 0.203 mm", xmm >= 0.203, xmm.toFixed(3) + " mm" + (xmm >= 0.203 ? "" : " - print and scan-test before use"));
-                    check(nm, "Height >= GS1 minimum", inf.heightDots >= inf.minHeightDots, inf.heightDots + " dots, minimum " + inf.minHeightDots);
+                    check(nm, "Height >= GS1 truncated minimum (" + cropMinX(eng) + " x bar width)", inf.heightDots >= inf.minHeightDots, inf.heightDots + " dots, minimum " + inf.minHeightDots);
+                    var shin = inf.smallestHeightDots / eng.dpi;
+                    check(nm, "Height >= Hurst's smallest DataBar (" + shin.toFixed(2) + " in)", inf.heightDots >= inf.smallestHeightDots,
+                          inf.heightDots + " dots (" + (inf.heightDots / eng.dpi).toFixed(3) + " in); smallest Hurst prints " + inf.smallestHeightDots + " dots (Auvil)" +
+                          (inf.heightDots >= inf.smallestHeightDots ? "" : " - not recommended, print and scan-test") +
+                          (inf.cropped ? "; cropped from the GS1 full height " + inf.fullHeightDots + " dots" : "; GS1 full height"));
                 } else {
+                    check(nm, "Bar width is whole dots and >= minimum", inf.xDots >= xr.min && inf.xDots >= eng.minLineDots,
+                          "X = " + inf.xDots + " dots (" + xmm.toFixed(3) + " mm); minimum " + xr.min);
                     check(nm, "Bar height >= engineering minimum", inf.heightDots >= eng.linear.minHeightDots, inf.heightDots + " dots, minimum " + eng.linear.minHeightDots);
                     if (inf.family === "retail") {
                         check(nm, "Bar width >= GS1 retail minimum 0.264 mm", xmm >= 0.264, xmm.toFixed(3) + " mm (" + Math.round(xmm / 0.33 * 100) + " % of nominal)");
@@ -3115,7 +3182,7 @@ H3.Core = (function () {
                 var bsym = opts.symbology || "databar-stacked-omni";
                 var bxr = xRange(bsym, eng);
                 return extend(base, { symbology: bsym, source: opts.source || "typed", data: opts.data || "",
-                                      xDots: symInfo(bsym).family === "databar" ? clampInt(eng.databar.defaultXDots || bxr.min, bxr.min, bxr.max) : bxr.min, heightDots: 0,
+                                      xDots: symInfo(bsym).family === "databar" ? clampX(eng.databar.defaultXDots || bxr.min, bxr) : bxr.min, heightDots: 0,
                                       hri: true, includeLot: true });
             case "qr": return extend(base, { content: opts.content || "gs1dl", source: opts.source || "typed", gtin: opts.gtin || "", includeLot: true,
                                              link: opts.link || "https://", text: opts.text || "", moduleDots: qrModuleDots({}, eng) });
@@ -3156,7 +3223,7 @@ H3.Core = (function () {
         if (el.type === "barcode") {
             if (symInfo(el.symbology).id !== el.symbology) el.symbology = "databar-stacked-omni";
             var xr = xRange(el.symbology, eng);
-            el.xDots = clampInt(el.xDots, xr.min, xr.max);
+            el.xDots = clampX(el.xDots, xr);
             el.heightDots = Math.max(0, el.heightDots | 0);
             el.source = (el.source === "job" && symInfo(el.symbology).job) ? "job" : "typed";
             el.data = el.data === undefined || el.data === null ? "" : String(el.data);
@@ -3183,7 +3250,7 @@ H3.Core = (function () {
         STOCKS: STOCKS, BASIC_STOCKS: BASIC_STOCKS, findStock: findStock, docStock: docStock, cleanStock: cleanStock, stockProblems: stockProblems, stockName: stockName,
         decodeMask: decodeMask, encodeMask: encodeMask, maskFromAlpha: maskFromAlpha, parseDieFileName: parseDieFileName, dieLabel: dieLabel, dieStockFromImage: dieStockFromImage, maskIntegral: maskIntegral,
         labelGeometry: labelGeometry, insideShape: insideShape, printable: printable,
-        SYMBOLOGIES: SYMBOLOGIES, symInfo: symInfo, xRange: xRange, qrModuleRange: qrModuleRange, qrModuleDots: qrModuleDots, dataSource: dataSource, qrGtinInput: qrGtinInput, linearInput: linearInput,
+        SYMBOLOGIES: SYMBOLOGIES, symInfo: symInfo, xRange: xRange, xValues: xValues, clampX: clampX, smallestDataBarDots: smallestDataBarDots, cropMinX: cropMinX, qrModuleRange: qrModuleRange, qrModuleDots: qrModuleDots, dataSource: dataSource, qrGtinInput: qrGtinInput, linearInput: linearInput,
         Bitmap1: Bitmap1, FIELD_DEFS: FIELD_DEFS, fieldText: fieldText, qrContent: qrContent,
         buildElement: buildElement, elementName: elementName, elementSummary: elementSummary,
         Placement: Placement, overlaps: overlaps, renderLabel: renderLabel, validate: validate,
@@ -3196,7 +3263,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Editor simulator - user interface (browser only).
- * DRAFT - Hurst International, rev G, 2026-10-05 (revs F, E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
+ * DRAFT - Hurst International, rev H, 2026-10-07 (revs G, F, E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
  *
  * The UI only calls H3.Core / H3.Gs1 / H3.DataBar / H3.Qr (the portable core). In H3 this layer is rebuilt
  * in the C# UI toolkit; the behaviour (flows, prompts, fixes, lane simulation) is described in the port guide.
@@ -4496,6 +4563,34 @@ if (typeof module !== "undefined") { module.exports = H3; }
         el.hAlign = (s.x === Math.round((S.R.geo.w - it.w) / 2)) ? el.hAlign : "none";
         return true;
     }
+    /**
+     * Rev H: make a DataBar fit the label. Keep the widest bar width that fits (from `fromX` down, in half dots),
+     * at the tallest height that fits between the GS1 full height and Hurst's smallest DataBar (0.16 in).
+     * Height is cropped before bars are thinned; the height never goes below Hurst's smallest here.
+     */
+    function fitDataBar(el, fromX) {
+        var xs = Core.xValues(el.symbology, S.eng).filter(function (v) { return v <= fromX + 1e-9; }).reverse();
+        var smallest = Core.smallestDataBarDots(S.eng);
+        function fitsAt(x, hd) {
+            var t = JSON.parse(JSON.stringify(el)); t.xDots = x; t.heightDots = hd;
+            var b = measure(S.doc, t);
+            return Core.Placement.fitsAnywhere(S.R.geo, b.w, b.h);
+        }
+        for (var i = 0; i < xs.length; i++) {
+            var x = xs[i];
+            if (fitsAt(x, 0)) { el.xDots = x; el.heightDots = 0; return true; }
+            var lo = smallest, hi = measureFull(el, x) - 1;
+            if (hi < lo || !fitsAt(x, lo)) continue;
+            while (lo < hi) { var mid = Math.ceil((lo + hi) / 2); if (fitsAt(x, mid)) lo = mid; else hi = mid - 1; }
+            el.xDots = x; el.heightDots = lo; return true;
+        }
+        return false;
+    }
+    function measureFull(el, x) {
+        var t = JSON.parse(JSON.stringify(el)); t.xDots = x; t.heightDots = 0;
+        var it = Core.buildElement(t, { eng: S.eng, job: S.doc.job, text: text });
+        return it.info.fullHeightDots || it.info.heightDots;
+    }
     /** Largest value of a size property (bar width, QR module) from `from` down to `to` that fits somewhere on the label. */
     function fitSize(el, prop, from, to) {
         for (var v = from; v >= to; v--) {
@@ -4517,7 +4612,11 @@ if (typeof module !== "undefined") { module.exports = H3; }
             if (el.content === "gs1dl" && el.includeLot) { el.includeLot = false; toast("Lot left out of the QR to make it smaller."); fitSize(el, "moduleDots", m0, Core.qrModuleRange(S.eng).min); commit(); return; }
             toast("This QR code is too big for the label even at the smallest modules. Shorten what it says.", true); return;
         }
-        if (el.type === "barcode") {
+        if (el.type === "barcode" && Core.symInfo(el.symbology).family === "databar") {
+            if (!fitDataBar(el, Core.newElement("barcode", S.eng, { symbology: el.symbology }).xDots)) {
+                toast(Core.symInfo(el.symbology).label + " doesn’t fit this label even at the thinnest bars and " + fmtLen(Core.smallestDataBarDots(S.eng)) + " tall. Pick another barcode type or label shape.", true); commit(); return;
+            }
+        } else if (el.type === "barcode") {
             el.xDots = Core.xRange(el.symbology, S.eng).min; el.heightDots = 0;
             var b0 = measure(S.doc, el);
             if (!Core.Placement.fitsAnywhere(geo, b0.w, b0.h) && el.hri !== false) el.hri = false;
@@ -4549,7 +4648,10 @@ if (typeof module !== "undefined") { module.exports = H3; }
         var el = Core.newElement(type, S.eng, opts);
         if (type === "qr" || type === "barcode" || type === "plu") el.hAlign = "center";
         if (type === "qr") fitSize(el, "moduleDots", el.moduleDots, Core.qrModuleRange(S.eng).min);
-        if (type === "barcode") fitSize(el, "xDots", el.xDots, Core.xRange(el.symbology, S.eng).min);
+        if (type === "barcode") {
+            if (Core.symInfo(el.symbology).family === "databar") fitDataBar(el, el.xDots);
+            else fitSize(el, "xDots", el.xDots, Core.xRange(el.symbology, S.eng).min);
+        }
         var b = measure(S.doc, el);
         var geo = S.R.geo;
         var boxes = othersBoxes(null);
@@ -4770,7 +4872,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
     };
     /** Box size of a barcode element if it had this symbology (smallest bar width), for the "fits" notes. */
     function trialBox(el, sym) {
-        var t = JSON.parse(JSON.stringify(el)); t.symbology = sym; t.xDots = Core.xRange(sym, S.eng).min; t.heightDots = 0;
+        var t = JSON.parse(JSON.stringify(el)); t.symbology = sym; t.xDots = Core.xRange(sym, S.eng).min;
+        t.heightDots = Core.symInfo(sym).family === "databar" ? Core.smallestDataBarDots(S.eng) : 0;   // rev H: DataBar can be cropped to 0.16 in
         if (Core.symInfo(sym).job === false) t.source = "typed";
         if (t.source === "typed" && !t.data) t.data = defaultBarcodeData(sym);
         var b = measure(S.doc, t);
@@ -4794,11 +4897,58 @@ if (typeof module !== "undefined") { module.exports = H3; }
         var keep = el.data && Core.symInfo(old).family === Core.symInfo(sym).family && Core.symInfo(sym).family !== "code128";
         if (!keep && el.source === "typed") el.data = defaultBarcodeData(sym);
         Core.sanitiseElement(el, S.eng);
-        fitSize(el, "xDots", el.xDots, Core.xRange(sym, S.eng).min);
+        if (Core.symInfo(sym).family === "databar") fitDataBar(el, el.xDots);
+        else fitSize(el, "xDots", el.xDots, Core.xRange(sym, S.eng).min);
         compute();
         var it = itemFor(el.id);
         if (it && !it.fits && Core.Placement.fitsAnywhere(S.R.geo, it.w, it.h)) placeFree(el);
         commit();
+    }
+    function halfLabel(x) { return Math.floor(x) + (x % 1 ? "½" : ""); }
+    /**
+     * Rev H (Ryan 10.07.26): DataBar height. Full GS1 height down to Hurst's smallest DataBar (Auvil, 0.16 in) freely;
+     * shorter only after a "not recommended" warning; never below the GS1 truncated minimum (13 x bar width).
+     */
+    function propsDataBarHeight(box, el, it, inf, geo) {
+        var step = Math.max(1, Math.round(inf.xDots));
+        var smallest = inf.smallestHeightDots, floor = inf.minHeightDots, full = inf.fullHeightDots;
+        function setH(hd) {
+            hd = Math.max(floor, hd);
+            if (hd < smallest && inf.heightDots >= smallest) { warnShortDataBar(el, hd, smallest); return; }
+            el.heightDots = hd >= full && inf.heightDots < full ? 0 : hd;
+            commit();
+        }
+        var note = inf.cropped ? "cropped · GS1 full " + fmtLen(full) : "GS1 full height";
+        box.appendChild(sec("Height", note, [
+            stepper("hVal", fmtLen(inf.heightDots), inf.heightDots + " dots", function () { setH(inf.heightDots - step); },
+                function () { setH(inf.heightDots + step); }, inf.heightDots <= floor, !Core.Placement.fitsAnywhere(geo, it.w, it.h + step)),
+            h("div", { class: "btnrow" }, [
+                h("button", { class: "btn small", type: "button", id: "h-full", text: "Full height", disabled: inf.heightDots === full,
+                    onclick: function () { el.heightDots = 0; commit(); if (!itemFor(el.id).fits) toast("Full height doesn’t fit here; it is shown in red.", true); } }),
+                h("button", { class: "btn small", type: "button", id: "h-smallest", text: "Smallest (" + fmtLen(smallest) + ")", title: "The smallest DataBar height Hurst prints (Auvil)", disabled: inf.heightDots === smallest,
+                    onclick: function () { el.heightDots = smallest; commit(); } }),
+                el.symbology === "databar-stacked-omni" ? h("button", { class: "btn small", type: "button", id: "h-auvil", text: "Auvil size (3½ × " + fmtLen(smallest) + ")", title: "Ryan’s Auvil DataBar: 3½-dot bars, 0.5831 × 0.1599 in",
+                    disabled: inf.xDots === 3.5 && inf.heightDots === smallest,
+                    onclick: function () { el.xDots = 3.5; el.heightDots = smallest; commit(); } }) : null
+            ]),
+            h("div", { class: inf.heightDots < smallest ? "hint err" : "hint", id: "hHint", text: inf.heightDots < smallest ?
+                "Shorter than the smallest DataBar Hurst prints (" + fmtLen(smallest) + ", Auvil). Not recommended: print and scan-test it." :
+                "Height changes without changing the width. Crop it down to " + fmtLen(smallest) + " (the Auvil DataBar, the smallest Hurst prints). Shorter asks first; it can’t go below " +
+                fmtLen(floor) + " (" + Core.cropMinX(S.eng) + " × bar width, the GS1 minimum for a cropped DataBar)." })
+        ]));
+    }
+    /** The "not recommended" popup when a DataBar is made shorter than Hurst's smallest (Ryan 10.07.26). */
+    function warnShortDataBar(el, hd, smallest) {
+        var keep = h("button", { class: "btn primary", type: "button", id: "short-keep", text: "Keep " + fmtLen(smallest), onclick: function () {
+            closeDialog(); el.heightDots = smallest; commit(); } });
+        var go = h("button", { class: "btn", type: "button", id: "short-go", text: "Make it " + fmtLen(hd) + " anyway", onclick: function () {
+            closeDialog(); el.heightDots = hd; addLog("DataBar made shorter than recommended: " + hd + " dots."); commit(); } });
+        openDialog("Shorter than recommended", [h("div", { class: "sec" }, [
+            h("p", { class: "hint", style: "font-size:15px;color:var(--text)", text: "This DataBar would be " + fmtLen(hd) + " tall. The smallest DataBar Hurst prints is " +
+                fmtLen(smallest) + " (Auvil, 0.5831 × 0.1599 in)." }),
+            h("p", { class: "hint", text: "Making it shorter than that is not recommended: it may not scan. If you go ahead, print and scan-test it before use." })
+        ])], [keep, go], true);
+        setTimeout(function () { keep.focus(); }, 0);
     }
     function propsBarcode(box, el, it) {
         var inf = it.built.info, geo = S.R.geo, sinfo = Core.symInfo(el.symbology);
@@ -4864,24 +5014,30 @@ if (typeof module !== "undefined") { module.exports = H3; }
         }
         var xr = Core.xRange(el.symbology, S.eng);
         var opts = [], blocked = 0;
-        for (var x = xr.min; x <= xr.max; x++) {
+        Core.xValues(el.symbology, S.eng).forEach(function (x) {
             var t2 = JSON.parse(JSON.stringify(el)); t2.xDots = x;
             var b2 = measure(S.doc, t2);
             var ok = Core.Placement.fitsAnywhere(geo, b2.w, b2.h);
             if (!ok && x !== inf.xDots) blocked++;
-            opts.push({ value: x, label: x + (x === xr.min ? " dots" : ""), disabled: !ok && x !== inf.xDots, title: ok ? fmtLen(x) : "Too big for this label" });
-        }
-        box.appendChild(sec("Bar width", fmtLen(inf.xDots) + " per module", [seg(opts, inf.xDots, function (v) { el.xDots = v; commit(); }),
-            h("div", { class: "hint", text: "Starts at " + xr.min + " dots" + (fam === "databar" ? (xr.min < 3 ? ". GS1 for produce asks for 0.203 mm = 3 dots or more; 2 dots fits the small dies but print and scan-test it" : ", the smallest that meets GS1 for produce") :
-                fam === "retail" ? " (GS1 retail asks for 0.264 mm = 4 dots or more)" : " (the printhead floor)") + ". Only whole print dots are allowed." +
+            // rev H: DataBar shows up to 9 widths (half dots), so its buttons are bare numbers and the dots go in the note
+            opts.push({ value: x, label: halfLabel(x) + (x === xr.min && fam !== "databar" ? " dots" : ""), disabled: !ok && x !== inf.xDots, title: ok ? fmtLen(x) : "Too big for this label" });
+        });
+        box.appendChild(sec("Bar width", (fam === "databar" ? halfLabel(inf.xDots) + " dots · " : "") + fmtLen(inf.xDots) + " per module", [seg(opts, inf.xDots, function (v) { el.xDots = v; commit(); }),
+            h("div", { class: "hint", text: fam === "databar" ?
+                "Dots per bar. 3 = Hurst’s standard DataBar (0.50 in wide). 3½ = the Auvil DataBar (0.58 in), a little wider to scan better. " +
+                (xr.min * 25.4 / S.eng.dpi < 0.203 ? "2½ meets GS1 for produce (0.203 mm); 2 doesn’t: print and scan-test it." : "") + (blocked ? " Wider bars don’t fit this label." : "") :
+                "Starts at " + xr.min + " dots" + (fam === "retail" ? " (GS1 retail asks for 0.264 mm = 4 dots or more)" : " (the printhead floor)") + ". Only whole print dots are allowed." +
                 (blocked ? " Wider bars don’t fit this label." : "") })]));
-        var stepH = inf.xDots;
-        box.appendChild(sec(linear ? "Bar height" : "Height", "min " + fmtLen(inf.minHeightDots), [stepper("hVal", fmtLen(inf.heightDots), inf.heightDots + " dots", function () {
-            el.heightDots = Math.max(inf.minHeightDots, inf.heightDots - stepH); if (el.heightDots === inf.minHeightDots) el.heightDots = 0; commit();
-        }, function () { el.heightDots = inf.heightDots + stepH; commit(); }, inf.heightDots <= inf.minHeightDots,
-            !Core.Placement.fitsAnywhere(geo, it.w, it.h + stepH)),
-            h("div", { class: "hint", text: fam === "databar" ? "Height changes without changing the width. It can’t go below the GS1 minimum (" + (el.symbology === "databar-omni" ? "33" : "69") + " × bar width)." :
-                "Taller bars scan more easily. The shortest allowed is set by engineering." })]));
+        if (fam === "databar") {
+            propsDataBarHeight(box, el, it, inf, geo);
+        } else {
+            var stepH = inf.xDots;
+            box.appendChild(sec("Bar height", "min " + fmtLen(inf.minHeightDots), [stepper("hVal", fmtLen(inf.heightDots), inf.heightDots + " dots", function () {
+                el.heightDots = Math.max(inf.minHeightDots, inf.heightDots - stepH); if (el.heightDots === inf.minHeightDots) el.heightDots = 0; commit();
+            }, function () { el.heightDots = inf.heightDots + stepH; commit(); }, inf.heightDots <= inf.minHeightDots,
+                !Core.Placement.fitsAnywhere(geo, it.w, it.h + stepH)),
+                h("div", { class: "hint", text: "Taller bars scan more easily. The shortest allowed is set by engineering." })]));
+        }
         box.appendChild(h("div", { class: "readout tabnum", id: "symSize" }));
         live(function () {
             var cur = itemFor(el.id); if (!cur) return;
@@ -5867,12 +6023,18 @@ if (typeof module !== "undefined") { module.exports = H3; }
             num("set-margin", eng.edgeMarginDots, 0, 30, 1, function (v) { eng.edgeMarginDots = v; }),
             h("div", { class: "k", html: "Minimum line / bar / space (dots)<small>Printhead floor. 1-dot elements don’t print reliably.</small>" }),
             num("set-minline", eng.minLineDots, 2, 6, 1, function (v) { eng.minLineDots = v; eng.shape.minStrokeDots = Math.max(eng.shape.minStrokeDots, v); }),
-            h("div", { class: "k", html: "DataBar minimum bar width (dots)<small>2 dots fits the Hurst dies (ruled 10.02.26). GS1 produce minimum 0.203 mm = 3 dots; below that the check flags it.</small>" }),
-            num("set-xmin", eng.databar.minXDots, 2, 8, 1, function (v) { eng.databar.minXDots = v; eng.databar.maxXDots = Math.max(eng.databar.maxXDots, v); eng.databar.defaultXDots = Math.max(eng.databar.defaultXDots, v); }),
+            h("div", { class: "k", html: "DataBar bar widths in half dots<small>Rev H: 2½, 3½ … alternate whole-dot bars. 3½ dots = the Auvil DataBar (0.58 in wide).</small>" }),
+            sel("set-xhalf", eng.databar.halfDots === false ? "no" : "yes", [["yes", "Whole and half dots"], ["no", "Whole dots only"]], function (v) { eng.databar.halfDots = v === "yes"; }),
+            h("div", { class: "k", html: "Hurst’s smallest DataBar height (in)<small>The Auvil DataBar, 0.5831 × 0.1599 in. Shorter is allowed only after a “not recommended” warning, and the check flags it.</small>" }),
+            num("set-dbsmall", eng.databar.smallestHeightIn != null ? eng.databar.smallestHeightIn : 0.1599, 0.05, 1, 0.0001, function (v) { eng.databar.smallestHeightIn = v; }),
+            h("div", { class: "k", html: "DataBar shortest allowed (× bar width)<small>GS1 minimum for a cropped (truncated) DataBar: 13 × bar width.</small>" }),
+            num("set-dbcrop", eng.databar.cropMinX || 13, 5, 69, 1, function (v) { eng.databar.cropMinX = v; }),
+            h("div", { class: "k", html: "DataBar minimum bar width (dots)<small>2 dots fits the Hurst dies (ruled 10.02.26). GS1 produce minimum 0.203 mm: 2½ dots (0.212 mm) meets it, 2 dots doesn’t and the check flags it.</small>" }),
+            num("set-xmin", eng.databar.minXDots, 2, 8, 0.5, function (v) { eng.databar.minXDots = v; eng.databar.maxXDots = Math.max(eng.databar.maxXDots, v); eng.databar.defaultXDots = Math.max(eng.databar.defaultXDots, v); }),
             h("div", { class: "k", html: "DataBar bar width a new barcode starts at (dots)<small>Steps down automatically when the label is too small.</small>" }),
-            num("set-xdef", eng.databar.defaultXDots, 2, 10, 1, function (v) { eng.databar.defaultXDots = Math.min(Math.max(v, eng.databar.minXDots), eng.databar.maxXDots); }),
+            num("set-xdef", eng.databar.defaultXDots, 2, 10, 0.5, function (v) { eng.databar.defaultXDots = Math.min(Math.max(v, eng.databar.minXDots), eng.databar.maxXDots); }),
             h("div", { class: "k", html: "DataBar maximum bar width (dots)" }),
-            num("set-xmax", eng.databar.maxXDots, 2, 10, 1, function (v) { eng.databar.maxXDots = Math.max(v, eng.databar.minXDots); }),
+            num("set-xmax", eng.databar.maxXDots, 2, 10, 0.5, function (v) { eng.databar.maxXDots = Math.max(v, eng.databar.minXDots); }),
             h("div", { class: "k", html: "UPC / EAN minimum bar width (dots)<small>GS1 retail minimum 0.264 mm → 4 dots. 3 dots (0.254 mm) is flagged in the checks.</small>" }),
             num("set-rxmin", eng.linear.retailMinXDots, 2, 8, 1, function (v) { eng.linear.retailMinXDots = v; }),
             h("div", { class: "k", html: "Code 128 / GS1-128 minimum bar width (dots)<small>2 dots = the printhead floor.</small>" }),
