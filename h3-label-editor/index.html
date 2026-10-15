@@ -399,7 +399,7 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
     <button class="btn" id="btnLang" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>English</button>
     <button class="btn" id="btnExit" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>Exit</button>
   </nav>
-  <div class="foot"><span>Label Editor simulator rev H &middot; DRAFT 2026-10-07 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
+  <div class="foot"><span>Label Editor simulator rev I &middot; DRAFT 2026-10-15 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -3263,7 +3263,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Editor simulator - user interface (browser only).
- * DRAFT - Hurst International, rev H, 2026-10-07 (revs G, F, E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
+ * DRAFT - Hurst International, rev I, 2026-10-15 (rev H 2026-10-07; revs G, F, E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
  *
  * The UI only calls H3.Core / H3.Gs1 / H3.DataBar / H3.Qr (the portable core). In H3 this layer is rebuilt
  * in the C# UI toolkit; the behaviour (flows, prompts, fixes, lane simulation) is described in the port guide.
@@ -4646,6 +4646,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
     }
     function addElement(type, opts) {
         var el = Core.newElement(type, S.eng, opts);
+        if (type === "qr" && el.content === "link" && el.link === "https://") el.link = "";   // rev I: start empty; https:// is added as you type
         if (type === "qr" || type === "barcode" || type === "plu") el.hAlign = "center";
         if (type === "qr") fitSize(el, "moduleDots", el.moduleDots, Core.qrModuleRange(S.eng).min);
         if (type === "barcode") {
@@ -5048,10 +5049,46 @@ if (typeof module !== "undefined") { module.exports = H3; }
     }
 
     // ---------- QR ----------
+    /**
+     * Rev I (Ryan 10.15.26: typing a website into the QR on a phone didn't work).
+     * normLink: what a phone needs to open it. Spaces are dropped (phone keyboards add them), a missing "https://" is
+     * added, and the scheme is lower-cased ("Https://" from an auto-capitalising keyboard).
+     */
+    function normLink(v) {
+        v = String(v === undefined || v === null ? "" : v).replace(/\s+/g, "");
+        if (!v) return "";
+        var m = /^([a-z][a-z0-9+.\-]*):(\/\/)?/i.exec(v);
+        if (m && (m[2] || /^(mailto|tel|sms|geo):/i.test(v))) return m[1].toLowerCase() + v.substring(m[1].length);
+        return "https://" + v;
+    }
+    function linkProblem(link) {
+        if (!link) return "Type the web address, for example westpakavocado.com.";
+        if (!/^https?:\/\//.test(link)) return "";
+        var host = link.replace(/^https?:\/\//, "").split(/[\/?#]/)[0];
+        if (!host) return "Type the web address, for example westpakavocado.com.";
+        if (host.indexOf(".") < 0 || /\.$/.test(host)) return "Finish the web address (it needs a dot, like .com).";
+        return "";
+    }
+    /**
+     * Rev I: the QR follows what it holds. When a longer address makes the code too big for the label, its modules
+     * step down (5 -> 4 -> 3 -> 2 dots) until it fits; when the address gets shorter they step back up to the size the
+     * QR started at (or the size picked under Module size).
+     */
+    function qrFollowContent(el) {
+        if (!S.qrPref) S.qrPref = {};
+        if (!S.qrPref[el.id]) S.qrPref[el.id] = Core.qrModuleDots(el, S.eng);
+        var from = S.qrPref[el.id], min = Core.qrModuleRange(S.eng).min, before = el.moduleDots;
+        if (!fitSize(el, "moduleDots", from, min)) el.moduleDots = min;
+        compute();
+        var it = itemFor(el.id);
+        if (it && !it.fits) placeFree(el);
+        return el.moduleDots !== before;
+    }
     function propsQr(box, el, it) {
         box.appendChild(sec("Content", null, [seg([{ value: "link", label: "Web link" }, { value: "text", label: "Text" }, { value: "gs1dl", label: "GS1 Digital Link" }],
             el.content, function (v) {
                 el.content = v;
+                if (v === "link" && (!el.link || el.link === "https://")) el.link = "";   // rev I: start empty; https:// is added as you type
                 if (v === "gs1dl" && !el.gtin && Core.dataSource(el) === "typed") { var g = Gs1.normaliseGtin(S.doc.job.gtin || ""); el.gtin = g.ok ? g.gtin14.substring(0, 13) : ""; }
                 commit(); focusSoon(v === "gs1dl" ? "f-qrgtin" : "f-qr");
             })]));
@@ -5071,11 +5108,18 @@ if (typeof module !== "undefined") { module.exports = H3; }
             box.appendChild(sec("Link in the QR code", null, [h("div", { class: "readout", id: "qrText" }),
                 h("div", { class: "hint", text: "With the lot, each lot prints its own code from one label design. A phone opens the web page." })]));
         } else if (el.content === "link") {
-            box.appendChild(sec("Web address", null, [h("input", { class: "inp mono", id: "f-qr", value: el.link, maxlength: "300", autocomplete: "off", spellcheck: "false",
-                placeholder: "https://…", oninput: function (e) { el.link = e.target.value.trim(); refresh(false); }, onchange: function () { commit(true); } })]));
+            // rev I: a phone keyboard for web addresses (no capitals, no autocorrect, ".com" and "/" keys)
+            box.appendChild(sec("Web address", null, [h("input", { class: "inp mono", id: "f-qr", type: "url", inputmode: "url", value: el.link, maxlength: "300",
+                autocomplete: "off", autocapitalize: "none", autocorrect: "off", spellcheck: "false", enterkeyhint: "done", placeholder: "westpakavocado.com",
+                oninput: function (e) { el.link = normLink(e.target.value); qrFollowContent(el); refresh(false); },
+                onkeydown: function (e) { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } },
+                onchange: function (e) { el.link = normLink(e.target.value); if (e.target.value !== el.link) e.target.value = el.link; qrFollowContent(el); commit(true); } }),
+                h("div", { class: "lbl", style: "margin-top:8px" }, ["A phone opens"]),
+                h("div", { class: "readout", id: "qrText" }),
+                h("div", { class: "hint", id: "qrLinkHint", text: "You can leave out https:// - it is added for you." })]));
         } else {
             box.appendChild(sec("Text", null, [h("textarea", { class: "inp qrtext", id: "f-qr", maxlength: "300", rows: "3", spellcheck: "false", placeholder: "Anything: text, a phone number, a code…",
-                value: el.text || "", oninput: function (e) { el.text = e.target.value; refresh(false); }, onchange: function () { commit(true); } })]));
+                value: el.text || "", oninput: function (e) { el.text = e.target.value; qrFollowContent(el); refresh(false); }, onchange: function () { qrFollowContent(el); commit(true); } })]));
         }
         box.appendChild(sec("Space in the code", "…", [
             h("div", { class: "meter", id: "qrMeter" }, [h("i")]),
@@ -5088,15 +5132,31 @@ if (typeof module !== "undefined") { module.exports = H3; }
             if (!okq && mv !== curM) mblocked++;
             mopts.push({ value: mv, label: mv + (mv === mr.min ? " dots" : ""), disabled: !okq && mv !== curM, title: okq ? fmtLen(mv) : "Too big for this label" });
         }
-        box.appendChild(sec("Module size", fmtLen(curM) + " per module", [seg(mopts, curM, function (v) { el.moduleDots = v; commit(); }),
+        var modSeg = seg(mopts, curM, function (v) { if (!S.qrPref) S.qrPref = {}; S.qrPref[el.id] = v; el.moduleDots = v; commit(); });
+        modSeg.id = "qrModSeg";
+        var modSec = sec("Module size", fmtLen(curM) + " per module", [modSeg,
+            h("div", { class: "hint", id: "qrModAuto" }),
             h("div", { class: "hint", text: "GS1 asks for 0.396 mm = 5 dots or more. Smaller modules fit the small dies; print and scan-test them. Only whole print dots are allowed." +
-                (mblocked ? " Bigger modules don’t fit this label." : "") })]));
+                (mblocked ? " Bigger modules don’t fit this label." : "") })]);
+        var modNote = modSec.querySelector(".lbl .v"); if (modNote) modNote.id = "qrModNote";
+        box.appendChild(modSec);
         var sizeNote = h("div", { id: "qrSize" });
         box.appendChild(sec("Size", S.eng.qr.sizeMode === "fixed" ? "fixed by engineering" : "grows to fit", [sizeNote]));
         live(function () {
             var cur = itemFor(el.id); if (!cur) return;
             var inf = cur.built.info;
             var qt = el$("qrText"); if (qt) qt.textContent = inf.text;
+            var lh = el$("qrLinkHint");
+            if (lh) { var lp = linkProblem(el.link || ""); lh.className = "hint" + (lp ? " err" : ""); lh.textContent = lp || "You can leave out https:// - it is added for you."; }
+            var mNow = Core.qrModuleDots(el, S.eng), ms = el$("qrModSeg");
+            if (ms) Array.prototype.forEach.call(ms.querySelectorAll("button"), function (bt) { bt.className = parseInt(bt.textContent, 10) === mNow ? "on" : ""; });
+            var mn = el$("qrModNote"); if (mn) mn.textContent = fmtLen(mNow) + " per module";
+            var ma = el$("qrModAuto");
+            if (ma) {
+                var pref = S.qrPref && S.qrPref[el.id];
+                ma.className = "hint" + (pref && mNow < pref ? " err" : "");
+                ma.textContent = pref && mNow < pref ? "Made smaller to fit what the code holds (" + pref + " → " + mNow + " dots). A shorter address brings it back." : "";
+            }
             var gh = el$("qrGtinHint");
             if (gh) {
                 var gIn = Core.qrGtinInput(el, S.doc.job), g = Gs1.normaliseGtin(gIn);

@@ -1,4 +1,4 @@
-# H3 Label Editor Simulator (rev H, 10.07.26)
+# H3 Label Editor Simulator (rev I, 10.15.26)
 
 A working browser simulator of the H3 fruit-label editor. It shows the label layout and generates real barcodes and QR codes:
 
@@ -10,6 +10,8 @@ A working browser simulator of the H3 fruit-label editor. It shows the label lay
 The page also has the engineering controls, a 1-bit 300 dpi print preview, a test print and send-to-lanes.
 
 **Open it:** https://ryanrhernandez-design.github.io/vibe-code/h3-label-editor/
+
+**New in rev I:** web addresses in QR codes work on a phone. The Web address box brings up the phone's web-address keyboard (no capitals, no autocorrect, `.com` and `/` keys); type `westpakavocado.com` and `https://` is added for you, and "A phone opens" shows exactly what the QR holds. A longer address makes the QR modules smaller so it still fits the label, and they grow back when the address gets shorter.
 
 **New in rev H:** cropped GS1 DataBar. Bar widths go in half dots (3½ dots = the Auvil DataBar, 0.5831 in wide), and the height can be cropped down to 0.16 in, the smallest DataBar Hurst prints. Shorter asks first with a "not recommended" warning, and never goes below the GS1 minimum (13 × bar width). A DataBar that has to shrink is cropped before its bars get thinner.
 
