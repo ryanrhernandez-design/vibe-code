@@ -328,6 +328,24 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
 .picthumb { border-radius: 6px; background: #fff; flex: none; }
 .row.wrap { display: flex; flex-wrap: wrap; gap: 8px; }
 
+/* rev K (Ryan 10.16, on his phone): the page never zooms - no double-tap zoom on buttons, no pinch, no zoom when a box gets
+   the focus - and on a phone the label stays in view while the adjustments scroll underneath it. */
+html, body, * { touch-action: pan-x pan-y; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.canvaswrap { touch-action: none; }
+@media (max-width: 1060px) {
+  .inp, input, select, textarea { font-size: 16px !important; }
+  .main > .stage { position: sticky; top: 0; z-index: 6; box-shadow: 0 10px 22px rgba(3, 6, 14, .55); }
+  .stage .stagebar { display: none; }
+  .stage .canvaswrap { flex: none; min-height: 0; height: 34vh; margin-top: 8px; }
+  .stage .zoombar { padding: 6px 8px; }
+  .stage .statusstrip { max-height: 66px; padding: 6px 10px; }
+  .props * { scroll-margin-top: calc(34vh + 150px); }   /* a box scrolled into view lands below the pinned label */
+}
+@media (max-width: 1060px) and (max-height: 520px) {
+  .main > .stage { position: static; box-shadow: none; }   /* a phone on its side: too short to keep the label pinned */
+}
+
 </style>
 </head>
 <body>
@@ -419,7 +437,7 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
     <button class="btn" id="btnLang" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>English</button>
     <button class="btn" id="btnExit" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>Exit</button>
   </nav>
-  <div class="foot"><span>Label Editor simulator rev J &middot; DRAFT 2026-10-16 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
+  <div class="foot"><span>Label Editor simulator rev K &middot; DRAFT 2026-10-16 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -2198,7 +2216,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Core - label model, engineering controls, placement rules, 1-bit renderer and checks.
- * DRAFT - Hurst International, H3 Label Editor simulator rev J, 2026-10-16 (rev H 2026-10-07; revs E-G 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
+ * DRAFT - Hurst International, H3 Label Editor simulator rev K, 2026-10-16 (rev J 2026-10-16; rev H 2026-10-07; revs E-G 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
  *
  * Everything here is UI-independent and deterministic, so it can be ported class-for-class to C#:
  *
@@ -2282,7 +2300,9 @@ H3.Core = (function () {
             shape: { minStrokeDots: 2, defaultStrokeDots: 3 },
             // rev J (Ryan 10.16.26: a picture taken on the phone, printed direct thermal): a photo or drawing as 1-bit dots
             picture: {
-                cellDots: 2,          // each picture dot is a cellDots x cellDots block: never below the 2-dot printhead floor (minLineDots)
+                cellDots: 1,          // rev K: pictures print dot by dot (1). The 2-dot floor (minLineDots) is for bars, spaces and lines:
+                                      // in a picture a weak single dot only lightens it a little. 2 = every picture dot a 2 x 2 block
+                                      // (rev J; coarser) if a test print shows single dots don't print.
                 maxBlackPct: 60       // engineering check: more black than this needs a test print (heat on the printhead); set from test prints
             },
             testPrint: { defaultLane: 1 },
@@ -2526,6 +2546,11 @@ H3.Core = (function () {
     /** May this dot be printed? Below the pre-printed band and inside the die-cut edge. */
     function printable(geo, x, y) {
         return y >= geo.band && insideShape(geo, x + 0.5, y + 0.5, 0);
+    }
+    /** Rev K: does this dot of a picture print? Pictures fill the label shape: they are trimmed to the die outline less the
+     *  edge margin, and to below the band plus the margin, like a photo in a frame. */
+    function pictureShows(geo, x, y) {
+        return y >= geo.band + geo.margin && insideShape(geo, x + 0.5, y + 0.5, geo.margin);
     }
 
     // =====================================================================================================
@@ -2991,8 +3016,9 @@ H3.Core = (function () {
     // el.src = { w, h, g8 }: the picture (already cropped and turned) as grey levels, w x h, row by row, one byte per
     //          pixel (0 = black ... 255 = white), base64. The editor stores it at about the printed size, so a label
     //          file stays small and every H3 prints the same dots from it.
-    // el.w, el.h = printed size in dots; it snaps down to whole cells (engineering picture.cellDots, 2 = the printhead floor).
-    // el.look  = "photo"   : error diffusion (Floyd-Steinberg, serpentine) spreads black cells to show the greys
+    // el.w, el.h = printed size in dots; it snaps down to whole cells (engineering picture.cellDots: 1 = dot by dot, rev K).
+    // el.look  = "photo"   : rev K - sharpened lightly, then Atkinson error diffusion spreads black dots to show the greys
+    //                        (clean whites and blacks, clear faces at label size; rev J used Floyd-Steinberg)
     //            "drawing" : sharp, each cell black when its grey is below the midpoint (logos, line art, text)
     // el.bright, el.contrast = -100 ... 100 (0 = as taken); el.invert = swap black and white (applied first).
     // Integer maths only, so the C# port (PictureDots) gives the identical dots.
@@ -3038,12 +3064,12 @@ H3.Core = (function () {
         return v;
     }
     function pictureCellDots(eng) {
-        var p = (eng.picture && eng.picture.cellDots) | 0;
-        return Math.max(eng.minLineDots | 0, p, 1);
+        return Math.max(1, Math.min(8, (eng.picture && eng.picture.cellDots) | 0));
     }
     /** Integer division truncating toward zero (C#'s a / b). */
     function idiv(a, b) { return (a - a % b) / b; }
-    /** Grey picture -> cells (1 = black), cw x ch. Steps: box-average resample, invert, contrast, brightness, then dither or threshold. */
+    /** Grey picture -> cells (1 = black), cw x ch. Steps: box-average resample, invert, contrast, brightness, then a threshold
+     *  (drawing) or sharpen + Atkinson error diffusion (photo). */
     function pictureCells(g, sw, sh, cw, ch, el) {
         var n = cw * ch, v = new Int32Array(n), x, y;
         // 1. box-average resample: target cell (x, y) averages source columns floor(x*sw/cw) .. floor((x+1)*sw/cw)-1 (at least one), rows the same
@@ -3070,24 +3096,34 @@ H3.Core = (function () {
             for (i = 0; i < n; i++) out[i] = v[i] < 128 ? 1 : 0;
             return out;
         }
-        // 3. photo: Floyd-Steinberg error diffusion, serpentine (even rows left to right, odd rows right to left).
-        //    Errors are kept in 1/16 levels: 7/16 ahead, 3/16 behind below, 5/16 below, 1/16 ahead below; read back with >> 4.
-        var cur = new Int32Array(cw + 2), nxt = new Int32Array(cw + 2);
+        // 3. photo, rev K. Sharpen: unsharp mask 3/4 over the 3 x 3 neighbourhood (edges repeat):
+        //    t' = t + (9t - sum of the 9) / 12, truncated, clamped 0..255.
+        var shp = new Int32Array(n);
+        for (y = 0; y < ch; y++) for (x = 0; x < cw; x++) {
+            var s9 = 0;
+            for (var dy = -1; dy <= 1; dy++) {
+                var yy2 = y + dy < 0 ? 0 : (y + dy >= ch ? ch - 1 : y + dy);
+                for (var dx = -1; dx <= 1; dx++) { var xx2 = x + dx < 0 ? 0 : (x + dx >= cw ? cw - 1 : x + dx); s9 += v[yy2 * cw + xx2]; }
+            }
+            var tv = v[y * cw + x], u = tv + idiv(9 * tv - s9, 12);
+            shp[y * cw + x] = u < 0 ? 0 : (u > 255 ? 255 : u);
+        }
+        // 4. Atkinson error diffusion, rows left to right: 1/8 of the error to each of (x+1, y), (x+2, y), (x-1, y+1), (x, y+1),
+        //    (x+1, y+1), (x, y+2); the other 2/8 is dropped on purpose (clean whites and blacks). Errors are kept in 1/8 levels
+        //    in three row buffers (2 spare cells at each end) and read back with >> 3.
+        var r0 = new Int32Array(cw + 4), r1 = new Int32Array(cw + 4), r2 = new Int32Array(cw + 4);
         for (y = 0; y < ch; y++) {
-            var ltr = (y % 2) === 0, d = ltr ? 1 : -1;
-            for (var k = 0; k < cw; k++) {
-                x = ltr ? k : cw - 1 - k;
-                var old = v[y * cw + x] + (cur[x + 1] >> 4);
+            for (x = 0; x < cw; x++) {
+                var old = shp[y * cw + x] + (r0[x + 2] >> 3);
                 var blk = old < 128;
                 out[y * cw + x] = blk ? 1 : 0;
                 var err = old - (blk ? 0 : 255);
-                cur[x + 1 + d] += err * 7;
-                nxt[x + 1 - d] += err * 3;
-                nxt[x + 1] += err * 5;
-                nxt[x + 1 + d] += err;
+                r0[x + 3] += err; r0[x + 4] += err;
+                r1[x + 1] += err; r1[x + 2] += err; r1[x + 3] += err;
+                r2[x + 2] += err;
             }
-            var tmp = cur; cur = nxt; nxt = tmp;
-            for (k = 0; k < cw + 2; k++) nxt[k] = 0;
+            var t0 = r0; r0 = r1; r1 = r2; r2 = t0;
+            for (var k = 0; k < cw + 4; k++) r2[k] = 0;
         }
         return out;
     }
@@ -3103,8 +3139,16 @@ H3.Core = (function () {
     // Placement rules (engineering controls: nothing can be placed where it cannot print)
     // =====================================================================================================
     var Placement = {
+        /** Rev K, pictures: the box stays inside the label's bounding box, below the band; what falls outside the label shape
+         *  (less the edge margin) isn't printed. mode "box" in the functions below uses this rule. */
+        fitsBox: function (geo, x, y, w, h) {
+            return w <= geo.headDots && x >= 0 && y >= geo.band && x + w <= geo.w && y + h <= geo.h;
+        },
+        /** The placement rule for an element: pictures use the box rule, everything else must be fully printable. */
+        modeFor: function (el) { return el && el.type === "picture" ? "box" : ""; },
         /** Box fully inside the printable area: below the band + margin, inside the die edge less the margin. */
-        fits: function (geo, x, y, w, h) {
+        fits: function (geo, x, y, w, h, mode) {
+            if (mode === "box") return Placement.fitsBox(geo, x, y, w, h);
             if (y < geo.band + geo.margin) return false;
             if (w > geo.headDots) return false;
             if (geo.shape === "mask") {
@@ -3119,17 +3163,17 @@ H3.Core = (function () {
         },
 
         /** Move from a (valid) position toward a target; slides along edges instead of passing them. */
-        clampMove: function (geo, fromX, fromY, toX, toY, w, h) {
-            if (Placement.fits(geo, toX, toY, w, h)) return { x: toX, y: toY, moved: true };
-            if (!Placement.fits(geo, fromX, fromY, w, h)) {
-                var s = Placement.findSpot(geo, w, h, [], toY);
+        clampMove: function (geo, fromX, fromY, toX, toY, w, h, mode) {
+            if (Placement.fits(geo, toX, toY, w, h, mode)) return { x: toX, y: toY, moved: true };
+            if (!Placement.fits(geo, fromX, fromY, w, h, mode)) {
+                var s = Placement.findSpot(geo, w, h, [], toY, mode);
                 return s ? { x: s.x, y: s.y, moved: true } : { x: fromX, y: fromY, moved: false };
             }
             function slide(ax, ay, bx, by) {
                 var x = ax, y = ay;
                 var sx = bx > ax ? 1 : (bx < ax ? -1 : 0), sy = by > ay ? 1 : (by < ay ? -1 : 0);
-                while (x !== bx && Placement.fits(geo, x + sx, y, w, h)) x += sx;
-                while (y !== by && Placement.fits(geo, x, y + sy, w, h)) y += sy;
+                while (x !== bx && Placement.fits(geo, x + sx, y, w, h, mode)) x += sx;
+                while (y !== by && Placement.fits(geo, x, y + sy, w, h, mode)) y += sy;
                 return { x: x, y: y };
             }
             // x first then y, and y first then x; keep whichever lands closer to the target
@@ -3142,8 +3186,9 @@ H3.Core = (function () {
         },
 
         /** First valid, non-overlapping spot, searching rows outward from preferY, x centred then scanned. */
-        findSpot: function (geo, w, h, avoid, preferY) {
-            var yMin = geo.band + geo.margin, yMax = geo.h - geo.margin - h;
+        findSpot: function (geo, w, h, avoid, preferY, mode) {
+            var box = mode === "box";
+            var yMin = box ? geo.band : geo.band + geo.margin, yMax = box ? geo.h - h : geo.h - geo.margin - h;
             if (yMax < yMin) return null;
             var start = Math.max(yMin, Math.min(yMax, (preferY === undefined || preferY === null) ? yMin : preferY));
             for (var k = 0; k <= (yMax - yMin) * 2 + 1; k++) {
@@ -3153,7 +3198,7 @@ H3.Core = (function () {
                 for (var j = 0; j <= geo.w; j++) {
                     var x = (j % 2 === 0) ? cx + (j >> 1) : cx - ((j + 1) >> 1);
                     if (x < 0 || x + w > geo.w) continue;
-                    if (!Placement.fits(geo, x, y, w, h)) continue;
+                    if (!Placement.fits(geo, x, y, w, h, mode)) continue;
                     var clash = false;
                     for (var i = 0; i < avoid.length; i++) {
                         if (overlaps({ x: x, y: y, w: w, h: h }, avoid[i])) { clash = true; break; }
@@ -3165,8 +3210,8 @@ H3.Core = (function () {
         },
 
         /** Can this size fit anywhere on the label (ignoring other elements)? */
-        fitsAnywhere: function (geo, w, h) {
-            return Placement.findSpot(geo, w, h, [], null) !== null;
+        fitsAnywhere: function (geo, w, h, mode) {
+            return Placement.findSpot(geo, w, h, [], null, mode) !== null;
         }
     };
 
@@ -3187,15 +3232,18 @@ H3.Core = (function () {
             var built = buildElement(el, env);
             // hAlign "center": x follows the element's width so it stays centred on the label when its content changes
             var ex = (el.hAlign === "center") ? Math.round((geo.w - built.w) / 2) : (el.x | 0);
-            var item = { el: el, built: built, x: ex, y: el.y | 0, w: built.w, h: built.h, clipped: 0, inked: 0 };
-            item.fits = Placement.fits(geo, item.x, item.y, item.w, item.h);
+            var item = { el: el, built: built, x: ex, y: el.y | 0, w: built.w, h: built.h, clipped: 0, inked: 0, trimmed: 0 };
+            var pic = el.type === "picture";
+            item.fits = Placement.fits(geo, item.x, item.y, item.w, item.h, pic ? "box" : "");
             var ink = built.ink;
             var ox = item.x + built.inkX, oy = item.y + built.inkY;
             for (var y = 0; y < ink.h; y++) {
                 for (var x = 0; x < ink.w; x++) {
                     if (!ink.data[y * ink.w + x]) continue;
                     var lx = ox + x, ly = oy + y;
-                    if (lx < 0 || ly < 0 || lx >= geo.w || ly >= geo.h || !printable(geo, lx, ly)) { item.clipped++; continue; }
+                    if (pic) {   // rev K: a picture is trimmed to the label shape on purpose - not counted as cut off
+                        if (lx < 0 || ly < 0 || lx >= geo.w || ly >= geo.h || !pictureShows(geo, lx, ly)) { item.trimmed++; continue; }
+                    } else if (lx < 0 || ly < 0 || lx >= geo.w || ly >= geo.h || !printable(geo, lx, ly)) { item.clipped++; continue; }
                     bmp.data[ly * geo.w + lx] = 1;
                     item.inked++;
                 }
@@ -3220,7 +3268,7 @@ H3.Core = (function () {
                 var e = it.built.errors[j];
                 problems.push({ elementId: it.el.id, code: e.code, text: e.text, fix: e.fix || null });
             }
-            if (!Placement.fitsAnywhere(geo, it.w, it.h)) {
+            if (!Placement.fitsAnywhere(geo, it.w, it.h, Placement.modeFor(it.el))) {
                 problems.push({ elementId: it.el.id, code: "too-big", text: label + " is too big for this label.", fix: { kind: "shrink" } });
             } else if (!it.fits) {
                 problems.push({ elementId: it.el.id, code: "outside", text: label + " is outside the printable area.", fix: { kind: "move-inside" } });
@@ -3289,13 +3337,17 @@ H3.Core = (function () {
             } else if (el.type === "shape") {
                 check(nm, "Line width >= " + eng.minLineDots + " dots", inf.strokeDots >= eng.minLineDots, inf.strokeDots + " dots");
             } else if (el.type === "picture") {
-                check(nm, "Picture dots in " + inf.cellDots + " x " + inf.cellDots + " blocks (printhead floor " + eng.minLineDots + " dots)", inf.cellDots >= eng.minLineDots,
-                      inf.cellsW + " x " + inf.cellsH + " blocks = " + t.w + " x " + t.h + " dots, " + (inf.look === "drawing" ? "drawing (sharp)" : "photo (spread dots)") +
-                      (inf.srcW ? ", from a " + inf.srcW + " x " + inf.srcH + " grey picture" : ""));
+                check(nm, "Picture dot size " + inf.cellDots + (inf.cellDots === 1 ? " dot (dot by dot)" : " x " + inf.cellDots + " dots") + ", set by engineering", true,
+                      inf.cellsW + " x " + inf.cellsH + " picture dots = " + t.w + " x " + t.h + " print dots, " + (inf.look === "drawing" ? "drawing (sharp)" : "photo (sharpened, spread dots)") +
+                      (inf.srcW ? ", from a " + inf.srcW + " x " + inf.srcH + " grey picture" : "") +
+                      (inf.cellDots < eng.minLineDots ? "; single dots in a picture are allowed (the " + eng.minLineDots + "-dot floor is for bars and lines) - confirm on a test print" : ""));
                 var maxBlack = (eng.picture && eng.picture.maxBlackPct) || 60;
                 check(nm, "Black <= " + maxBlack + " % of the picture", inf.blackPct <= maxBlack,
                       inf.blackPct + " % black" + (inf.blackPct <= maxBlack ? "" : " - heavy black heats the printhead: test-print before use"));
                 check(nm, "Picture data readable", inf.srcW > 0, inf.srcW ? "grey levels, base64" : "missing or unreadable");
+                var shown = pictureShownPct(geo, t);
+                check(nm, "Picture fills the label shape (trimmed to the die outline less the " + geo.margin + "-dot margin)", true,
+                      shown + " % of the picture's box is on the label" + (t.trimmed ? "; " + t.trimmed + " black dots outside it aren't printed" : ""));
             } else {
                 check(nm, "Text size >= " + eng.text.minPt + " pt", el.sizePt >= eng.text.minPt, el.sizePt + " pt = " + inf.sizeDots + " dots");
                 check(nm, "Approved font", fontFamily(eng, el.font) === inf.family, inf.family);
@@ -3306,6 +3358,12 @@ H3.Core = (function () {
         return { ready: errorCount === 0, problems: problems, checks: checks };
     }
 
+    /** Rev K: share of a picture's box (in %) that is on the label and prints (one decimal). */
+    function pictureShownPct(geo, item) {
+        var on = 0;
+        for (var y = 0; y < item.h; y++) for (var x = 0; x < item.w; x++) if (pictureShows(geo, item.x + x, item.y + y)) on++;
+        return Math.round(on * 1000 / Math.max(1, item.w * item.h)) / 10;
+    }
     function overlapsAny(item, items) {
         for (var i = 0; i < items.length; i++) {
             if (items[i] !== item && overlaps(item, items[i])) return true;
@@ -3434,7 +3492,7 @@ H3.Core = (function () {
         defaultEngineering: defaultEngineering,
         STOCKS: STOCKS, BASIC_STOCKS: BASIC_STOCKS, findStock: findStock, docStock: docStock, cleanStock: cleanStock, stockProblems: stockProblems, stockName: stockName,
         decodeMask: decodeMask, encodeMask: encodeMask, maskFromAlpha: maskFromAlpha, parseDieFileName: parseDieFileName, dieLabel: dieLabel, dieStockFromImage: dieStockFromImage, maskIntegral: maskIntegral,
-        labelGeometry: labelGeometry, insideShape: insideShape, printable: printable,
+        labelGeometry: labelGeometry, insideShape: insideShape, printable: printable, pictureShows: pictureShows, pictureShownPct: pictureShownPct,
         SYMBOLOGIES: SYMBOLOGIES, symInfo: symInfo, xRange: xRange, xValues: xValues, clampX: clampX, smallestDataBarDots: smallestDataBarDots, cropMinX: cropMinX, qrModuleRange: qrModuleRange, qrModuleDots: qrModuleDots, dataSource: dataSource, qrGtinInput: qrGtinInput, linearInput: linearInput,
         Bitmap1: Bitmap1, FIELD_DEFS: FIELD_DEFS, fieldText: fieldText, qrContent: qrContent,
         buildElement: buildElement, elementName: elementName, elementSummary: elementSummary,
@@ -3449,7 +3507,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Editor simulator - user interface (browser only).
- * DRAFT - Hurst International, rev J, 2026-10-16 (rev I 2026-10-15; rev H 2026-10-07; revs G, F, E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
+ * DRAFT - Hurst International, rev K, 2026-10-16 (rev J 2026-10-16; rev I 2026-10-15; rev H 2026-10-07; revs G, F, E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
  *
  * The UI only calls H3.Core / H3.Gs1 / H3.DataBar / H3.Qr (the portable core). In H3 this layer is rebuilt
  * in the C# UI toolkit; the behaviour (flows, prompts, fixes, lane simulation) is described in the port guide.
@@ -4378,6 +4436,15 @@ if (typeof module !== "undefined") { module.exports = H3; }
     // =================================================================================================
     // Presets (sample labels) - built with real fonts so they start "Ready to print"
     // =================================================================================================
+    /** Rev K (Ryan 10.16: "The label editor should open with a PLU populated but nothing else"): the label the editor opens
+     *  with - the 1.00 x 1.25 in oval with only a PLU, centred under the pre-printed band. */
+    function startDoc() {
+        var d = Core.newDocument("oval-100x125", "New label", "");
+        var plu = Core.newElement("plu", S.eng, { plu: "3110" }); plu.sizePt = 16; plu.hAlign = "center"; plu.y = 81;
+        d.elements = [plu];
+        stackBelow(d, [plu], 81, 4);
+        return JSON.parse(JSON.stringify(d));
+    }
     function presetDocs() {
         var eng = S.eng;
         var a = Core.newDocument("oval-100x125", "Kings River Packing – Cara Cara 3110", "Kings River Packing");
@@ -4748,7 +4815,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
     }
     function placeFree(el) {
         var it = itemFor(el.id);
-        var s = Core.Placement.findSpot(S.R.geo, it.w, it.h, othersBoxes(el.id), it.y);
+        var s = Core.Placement.findSpot(S.R.geo, it.w, it.h, othersBoxes(el.id), it.y, Core.Placement.modeFor(el));
         if (!s) return false;
         el.x = s.x; el.y = s.y;
         el.hAlign = (s.x === Math.round((S.R.geo.w - it.w) / 2)) ? el.hAlign : "none";
@@ -4874,7 +4941,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         var el = findEl(S.selId); if (!el) return;
         var it = itemFor(el.id);
         var tx = it.x + dx * S.eng.nudgeDots, ty = it.y + dy * S.eng.nudgeDots;
-        if (!Core.Placement.fits(S.R.geo, tx, ty, it.w, it.h)) { toast("It can’t go further that way: edge of the printable area.", true); return; }
+        if (!Core.Placement.fits(S.R.geo, tx, ty, it.w, it.h, Core.Placement.modeFor(el))) { toast("It can’t go further that way: edge of the printable area.", true); return; }
         if (dx !== 0) el.hAlign = "none";
         el.x = tx; el.y = ty;
         commit();
@@ -4883,7 +4950,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         var el = findEl(S.selId); if (!el) return;
         var it = itemFor(el.id);
         var cx = Math.round((S.R.geo.w - it.w) / 2);
-        if (!Core.Placement.fits(S.R.geo, cx, it.y, it.w, it.h)) { toast("It doesn’t fit centred at this height.", true); return; }
+        if (!Core.Placement.fits(S.R.geo, cx, it.y, it.w, it.h, Core.Placement.modeFor(el))) { toast("It doesn’t fit centred at this height.", true); return; }
         el.hAlign = "center"; el.x = cx;
         commit();
     }
@@ -4903,7 +4970,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         S.doc.elements.push(copy);
         compute();
         var it = itemFor(copy.id);
-        var s = Core.Placement.findSpot(S.R.geo, it.w, it.h, othersBoxes(copy.id), it.y + it.h);
+        var s = Core.Placement.findSpot(S.R.geo, it.w, it.h, othersBoxes(copy.id), it.y + it.h, Core.Placement.modeFor(copy));
         if (s) { copy.x = s.x; copy.y = s.y; }
         S.selId = copy.id;
         commit();
@@ -5392,8 +5459,9 @@ if (typeof module !== "undefined") { module.exports = H3; }
     S.pic = {};
     var PIC_WORK_MAX = 1600;   // the photo is scaled to this many pixels on its long side as soon as it is opened
     var PIC_SRC_MIN = 240;     // the grey picture stored in the label is at least this many pixels on its long side
-    var PIC_SRC_MAX = 60000;   // ... and at most this many pixels (80 KB in the label file): still more than 1 pixel per printed
-                               // picture dot on the biggest label, and a label stays far below the repository's 256 KB per label
+    var PIC_SRC_MAX = 80000;   // ... and at most this many pixels (107 KB in the label file): rev K prints pictures dot by dot, so
+                               // this is about one pixel per print dot for a picture filling a whole label, and a label stays below
+                               // the repository's 256 KB per label
     function touchDevice() {
         try { return window.matchMedia("(pointer: coarse)").matches || ("ontouchstart" in window) || navigator.maxTouchPoints > 0; } catch (e) { return false; }
     }
@@ -5481,13 +5549,16 @@ if (typeof module !== "undefined") { module.exports = H3; }
     /** Biggest size (width in dots, keeping the shape) where the picture fits: in free space (avoid = true) or anywhere.
      *  maxW caps the width. Returns { w, x, y } or null. */
     function pictureBiggest(el, avoid, maxW) {
-        var geo = S.R.geo, pc = Core.pictureCellDots(S.eng), asp = pictureAspect(el);
-        var others = avoid ? othersBoxes(el.id) : [];
+        return biggestForShape(pictureAspect(el), avoid ? othersBoxes(el.id) : [], maxW);
+    }
+    /** Biggest picture of shape asp (height / width) that fits on the label clear of `others`: { w, h, x, y } or null. */
+    function biggestForShape(asp, others, maxW) {
+        var geo = S.R.geo, pc = Core.pictureCellDots(S.eng);
         var hiC = Math.floor(Math.min(geo.w, maxW || geo.w) / pc), loC = 4, best = null;
         function tryC(c) {
             var w = c * pc, hh = Math.max(4, Math.round(c * asp)) * pc;
-            var sp = Core.Placement.findSpot(geo, w, hh, others, geo.band);
-            return sp ? { w: w, x: sp.x, y: sp.y } : null;
+            var sp = Core.Placement.findSpot(geo, w, hh, others, geo.band, "box");   // rev K: pictures fill the label shape
+            return sp ? { w: w, h: hh, x: sp.x, y: sp.y } : null;
         }
         if (!tryC(loC)) return null;
         while (loC <= hiC) {   // fits at loC; find the biggest that fits
@@ -5496,12 +5567,41 @@ if (typeof module !== "undefined") { module.exports = H3; }
         }
         return best || tryC(4);
     }
+    /** Rev K (Ryan 10.16: "When the picture is first populated it should be a large size and almost fit the whole frame"):
+     *  the free spaces on the label a picture can fill, one per shape from wide (h/w 0.5) to tall (2.5):
+     *  [{ aspect, w, h, x, y }]. exceptId = the picture being replaced (its own space counts as free). */
+    var FRAME_SHAPES = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.12, 1.25, 1.4, 1.6, 1.8, 2.1, 2.5];
+    function pictureFrames(exceptId) {
+        var others = othersBoxes(exceptId), out = [];
+        for (var pass = 0; pass < 2 && !out.length; pass++) {
+            FRAME_SHAPES.forEach(function (asp) {
+                var f = biggestForShape(asp, pass === 0 ? others : [], S.R.geo.w);
+                if (f) { f.aspect = f.h / f.w; out.push(f); }
+            });
+        }
+        return out;
+    }
+    /** The frame for a photo of shape photoAspect: filling the label comes first, with a mild penalty for what the crop
+     *  throws away (score = area x the square root of the share of the photo kept), so a portrait isn't cut to a strip. */
+    function bestFrame(frames, photoAspect) {
+        var best = null, bestScore = -1;
+        frames.forEach(function (f) {
+            var keep = Math.min(f.aspect, photoAspect) / Math.max(f.aspect, photoAspect), sc = f.w * f.h * Math.sqrt(keep);
+            if (sc > bestScore) { bestScore = sc; best = f; }
+        });
+        return best;
+    }
     /** Add a picture from a cropped photo (new), or put a new photo into an existing picture (replaceId). */
     function placePicture(mem, replaceId, keepLook) {
         var el = replaceId ? findEl(replaceId) : null;
         if (el) {
             S.pic[el.id] = mem;
             var w0 = el.w;
+            if (!keepLook) {
+                // a new photo into this picture: like a new picture, it fills the free space (its own space included)
+                var fN = pictureBiggest(el, true, S.R.geo.w) || pictureBiggest(el, false, S.R.geo.w);
+                if (fN) { w0 = fN.w; el.x = fN.x; el.y = fN.y; el.hAlign = "none"; }
+            }
             setPictureSize(el, w0);
             var made0 = makePictureSrc(mem, el.w, el.h);
             el.src = made0.src;
@@ -5519,8 +5619,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
         var probe = Core.newElement("picture", S.eng, {});
         S.pic[probe.id] = mem;
         var geo = S.R.geo;
-        var fit = pictureBiggest(probe, true, Math.round(geo.w * 0.7)), free = true;
-        if (!fit) { fit = pictureBiggest(probe, false, Math.round(geo.w * 0.7)); free = false; }
+        var fit = pictureBiggest(probe, true, geo.w), free = true;   // rev K: as big as the free space allows (rev J: 70 % of the width)
+        if (!fit) { fit = pictureBiggest(probe, false, geo.w); free = false; }
         if (!fit) { delete S.pic[probe.id]; toast("A picture doesn’t fit on this label shape.", true); return; }
         setPictureSize(probe, fit.w);
         var made = makePictureSrc(mem, probe.w, probe.h);
@@ -5549,7 +5649,19 @@ if (typeof module !== "undefined") { module.exports = H3; }
     }
     /** Crop and turn. work = the photo canvas; crop0 = the crop to start from (cropping again); replaceId = the picture it goes into. */
     function openCropDialog(work, crop0, replaceId, keepLook) {
-        var st = { work: work, crop: crop0 ? { x: crop0.x, y: crop0.y, w: crop0.w, h: crop0.h } : { x: 0, y: 0, w: work.width, h: work.height } };
+        var st = { work: work, crop: crop0 ? { x: crop0.x, y: crop0.y, w: crop0.w, h: crop0.h } : { x: 0, y: 0, w: work.width, h: work.height }, mode: crop0 ? "custom" : "fill" };
+        // rev K: a new photo starts cropped to the shape of the free space on the label, so it fills it
+        var frames = keepLook ? [] : pictureFrames(replaceId || null), frame = null;
+        function fillCrop() {
+            var W = st.work.width, H = st.work.height;
+            frame = frames.length ? bestFrame(frames, H / W) : null;
+            if (!frame) return { x: 0, y: 0, w: W, h: H };
+            var a = frame.aspect, w = W, hh = Math.round(W * a);
+            if (hh > H) { hh = H; w = Math.round(H / a); }
+            // centred across; from top to bottom a quarter of the way down, so the top of a portrait (the face) stays in
+            return { x: Math.round((W - w) / 2), y: Math.round((H - hh) / 4), w: w, h: hh };
+        }
+        if (!crop0) st.crop = fillCrop();
         var box = h("div", { class: "cropbox", id: "cropbox" });
         var view = h("canvas", { class: "cropimg" });
         var sel = h("div", { class: "cropsel", id: "cropsel" }, ["tl", "tr", "bl", "br"].map(function (k) { return h("span", { class: "ch " + k, "data-h": k }); }));
@@ -5571,7 +5683,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
                 n.style.left = (c.x * scale) + "px"; n.style.top = (c.y * scale) + "px";
                 n.style.width = (c.w * scale) + "px"; n.style.height = (c.h * scale) + "px";
             });
-            info.textContent = "Drag the box to move it, or a corner to resize it. " + Math.round(c.w) + " × " + Math.round(c.h) + " px kept.";
+            info.textContent = (st.mode === "fill" && frame ? "The box is the shape of the free space on the label, so the picture fills it (the label’s outline trims the corners). " : "") +
+                "Drag the box to move it, or a corner to resize it. " + Math.round(c.w) + " × " + Math.round(c.h) + " px kept.";
         }
         var drag = null;
         box.addEventListener("pointerdown", function (e) {
@@ -5580,6 +5693,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             var c = st.crop;
             if (!hk && !(px >= c.x && px <= c.x + c.w && py >= c.y && py <= c.y + c.h)) return;
             drag = { k: hk || "move", px: px, py: py, c0: { x: c.x, y: c.y, w: c.w, h: c.h } };
+            if (hk) st.mode = "custom";   // resizing by hand: the shape is the operator's now (moving keeps it)
             try { box.setPointerCapture(e.pointerId); } catch (er) { /* not supported */ }
             e.preventDefault();
         });
@@ -5609,6 +5723,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
             var k = st.crop, H0 = st.work.height;
             st.crop = { x: H0 - (k.y + k.h), y: k.x, w: k.h, h: k.w };   // the same part of the photo, turned with it
             st.work = c;
+            if (st.mode === "fill") st.crop = fillCrop();                // still the shape of the free space
+            else if (st.mode === "whole") st.crop = { x: 0, y: 0, w: c.width, h: c.height };
             layout();
         }
         var dlg = openDialog("Crop the picture", [
@@ -5616,7 +5732,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
             info,
             h("div", { class: "row" }, [
                 h("button", { class: "btn", type: "button", id: "crop-turn", html: icon("turn") + "Turn", onclick: turn }),
-                h("button", { class: "btn", type: "button", id: "crop-all", text: "Whole picture", onclick: function () { st.crop = { x: 0, y: 0, w: st.work.width, h: st.work.height }; place(); } })
+                frames.length ? h("button", { class: "btn", type: "button", id: "crop-fill", text: "Fill the label", onclick: function () { st.mode = "fill"; st.crop = fillCrop(); place(); } }) : null,
+                h("button", { class: "btn", type: "button", id: "crop-all", text: "Whole picture", onclick: function () { st.mode = "whole"; st.crop = { x: 0, y: 0, w: st.work.width, h: st.work.height }; place(); } })
             ])
         ], [
             h("button", { class: "btn", type: "button", text: "Cancel", onclick: closeDialog }),
@@ -5685,7 +5802,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             stepper("picSize", fmtLen(it.w) + " wide", it.w + " × " + it.h + " dots",
                 function () { setPictureSize(el, Math.max(4 * pc, el.w - step)); commit(); },
                 function () { setPictureSize(el, el.w + step); compute(); var i2 = itemFor(el.id); if (!i2.fits) placeFree(el); commit(); },
-                el.w <= 4 * pc, !Core.Placement.fitsAnywhere(S.R.geo, bigger.w, bigger.h)),
+                el.w <= 4 * pc, !Core.Placement.fitsAnywhere(S.R.geo, bigger.w, bigger.h, "box")),
             h("div", { class: "row wrap" }, [
                 h("button", { class: "btn small", type: "button", id: "pic-biggest", text: "Biggest that fits", onclick: function () {
                     var f = pictureBiggest(el, true, S.R.geo.w);
@@ -6047,7 +6164,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         var tx = S.drag.ex + Math.round((e.offsetX - S.drag.sx) / S.view.s);
         var ty = S.drag.ey + Math.round((e.offsetY - S.drag.sy) / S.view.s);
         if (S.drag.wasCenter && Math.abs(tx - S.drag.ex) < 4) tx = it.x; // keep centred on mostly-vertical drags
-        var res = Core.Placement.clampMove(S.R.geo, it.x, it.y, tx, ty, it.w, it.h);
+        var res = Core.Placement.clampMove(S.R.geo, it.x, it.y, tx, ty, it.w, it.h, Core.Placement.modeFor(it.el));
         if (res.x !== it.x || res.y !== it.y) {
             if (res.x !== it.x) el.hAlign = "none";
             el.x = res.x; el.y = res.y; S.drag.moved = true;
@@ -6640,7 +6757,11 @@ if (typeof module !== "undefined") { module.exports = H3; }
             h("div", { class: "k", html: "Compact links<small>Upper-case the web address so the QR can use compact mode.</small>" }),
             sel("set-compact", eng.qr.compactLinks ? "1" : "0", [["1", "On"], ["0", "Off"]], function (v) { eng.qr.compactLinks = v === "1"; }),
             h("div", { class: "k", html: "Smallest text (pt)" }),
-            num("set-minpt", eng.text.minPt, 4, 12, 0.5, function (v) { eng.text.minPt = v; })
+            num("set-minpt", eng.text.minPt, 4, 12, 0.5, function (v) { eng.text.minPt = v; }),
+            h("div", { class: "k", html: "Picture dot size (dots)<small>Rev K: 1 = pictures print dot by dot (sharpest). 2 = every picture dot a 2 × 2 block, if a test print shows single dots don’t print.</small>" }),
+            num("set-piccell", (eng.picture && eng.picture.cellDots) || 1, 1, 4, 1, function (v) { eng.picture = eng.picture || {}; eng.picture.cellDots = v; }),
+            h("div", { class: "k", html: "Picture black limit (%)<small>More black than this fails an engineering check (test-print it: heavy black heats the printhead). Set from test prints.</small>" }),
+            num("set-picblack", (eng.picture && eng.picture.maxBlackPct) || 60, 10, 100, 5, function (v) { eng.picture = eng.picture || {}; eng.picture.maxBlackPct = v; })
         ]);
         openDialog("Settings – Label Editor", [
             locked ? lockNote("Engineering controls are locked. Switch to Engineering (admin) in the header to change them.") : h("div", { class: "hint ok", text: "Engineering mode: changes apply to every label and are logged." }),
@@ -6799,13 +6920,35 @@ if (typeof module !== "undefined") { module.exports = H3; }
     // =================================================================================================
     // Boot
     // =================================================================================================
+    /** Rev K: lock the page scale on phones (Ryan 10.16: tapping + zoomed into the app). The standalone page has a viewport tag;
+     *  a page without one (e.g. inside claude.ai) gets one. Safari's pinch gesture is stopped too; the label has its own zoom. */
+    function lockPageZoom() {
+        try {
+            var m = document.querySelector('meta[name="viewport"]');
+            if (!m) { m = document.createElement("meta"); m.setAttribute("name", "viewport"); (document.head || document.documentElement).appendChild(m); }
+            m.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");
+        } catch (e) { /* no head */ }
+        ["gesturestart", "gesturechange"].forEach(function (t) { document.addEventListener(t, function (e) { e.preventDefault(); }, { passive: false }); });
+        var lastTouchEnd = 0;   // older Safari ignores touch-action for double taps: a second tap within 350 ms is not a zoom
+        document.addEventListener("touchend", function (e) {
+            var now = Date.now();
+            var t = e.target && e.target.closest ? e.target : null;
+            if (now - lastTouchEnd < 350 && e.cancelable && t && !t.closest("input, textarea, select, .canvaswrap, .cropbox")) {
+                e.preventDefault();
+                var hit = t.closest("button, a, label, summary");
+                if (hit && !hit.disabled) hit.click();   // the second tap still counts as a tap
+            }
+            lastTouchEnd = now;
+        }, { passive: false });
+    }
     function boot() {
+        lockPageZoom();
         setupCanvas();
         initLanes();
         S.shapes = readShapes();
         var presets = presetDocs();
         S.library = presets.concat(readLibrary());
-        loadDoc(Core.parseDocument(JSON.parse(JSON.stringify(presets[0])), S.eng));
+        loadDoc(Core.parseDocument(startDoc(), S.eng));
         wire();
         refresh(true);
         addLog("Label Editor opened (simulator).");
@@ -6816,13 +6959,15 @@ if (typeof module !== "undefined") { module.exports = H3; }
                 text.cache.clear();
                 var fresh = presetDocs();
                 S.library = fresh.concat(S.library.filter(function (d) { return !d._preset; }));
-                if (!S.dirty && S.history.length < 2) loadDoc(Core.parseDocument(JSON.parse(JSON.stringify(fresh[0])), S.eng));
+                if (!S.dirty && S.history.length < 2 && !S.sampleOpened) loadDoc(Core.parseDocument(startDoc(), S.eng));
                 S.fontsReady = true;
                 refresh(true);
             });
         }
         repoConnect();
-        window.H3Editor = { state: S, refresh: refresh, env: env, printedCanvas: printedCanvas, presetDocs: presetDocs, repo: REPO };
+        window.H3Editor = { state: S, refresh: refresh, env: env, printedCanvas: printedCanvas, presetDocs: presetDocs, repo: REPO,
+                            // tests: open sample i of the Label library (0 = the Cara Cara 3110 label the editor opened with before rev K)
+                            openSample: function (i) { S.sampleOpened = true; loadDoc(Core.parseDocument(JSON.parse(JSON.stringify(presetDocs()[i || 0])), S.eng)); refresh(true); } };
     }
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
