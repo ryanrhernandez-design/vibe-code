@@ -369,6 +369,22 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .main > .stage { position: static; box-shadow: none; }   /* a phone on its side: too short to keep the label pinned */
 }
 
+/* rev M (Ryan 10.16: "I want to be able to move and resize elements around easily with my finger on a touch screen phone.
+   Optimize this for mobile"): a long press on the label picks an item up (no text selection or callout), the label view
+   is taller on a phone and the label fills it, and the Position hint shows the round handles as they look on the label. */
+.canvaswrap, .canvaswrap canvas { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.hico { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); border: 2px solid #fff;
+        box-sizing: border-box; vertical-align: middle; margin: -3px 2px 0; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+.hico svg { width: 13px; height: 13px; display: block; }
+.movehint { line-height: 1.7; }
+@media (max-width: 1060px) {
+  .stage .canvaswrap { height: 42vh; }
+  .props * { scroll-margin-top: calc(42vh + 150px); }
+}
+@media (max-width: 1060px) and (max-height: 520px) {
+  .stage .canvaswrap { height: 74vh; }   /* a phone on its side: the page scrolls normally, so the label can use the screen */
+}
+
 </style>
 </head>
 <body>
@@ -460,7 +476,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <button class="btn" id="btnLang" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>English</button>
     <button class="btn" id="btnExit" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>Exit</button>
   </nav>
-  <div class="foot"><span>Label Editor simulator rev L &middot; DRAFT 2026-10-16 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
+  <div class="foot"><span>Label Editor simulator rev M &middot; DRAFT 2026-10-16 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -5096,7 +5112,10 @@ if (typeof module !== "undefined") { module.exports = H3; }
         box.appendChild(sec("Position", "each tap moves " + fmtLen(S.eng.nudgeDots) + " (" + S.eng.nudgeDots + " dots)", [
             h("div", { class: "posgrid" }, [pos, h("div", { class: "sec" }, [
                 h("button", { class: "btn" + (el.hAlign === "center" ? " sel" : ""), type: "button", html: icon("center") + "Centre", onclick: centerAcross }),
-                h("div", { class: "hint", text: touchDevice() ? "Tap the arrows to move it a little at a time." : "Or drag it on the label. It stops at the edge of the printable area." })
+                h("div", { class: "hint movehint", id: "moveHint", html: touchDevice() ?
+                    "On the label: drag " + HICON.move + " to move it, or press and hold it, then drag. Drag " + HICON.size +
+                    " to make it bigger or smaller, or use two fingers. The arrows move it a little at a time." :
+                    "Or drag it on the label, and drag its round corner handle to resize it. It stops at the edge of the printable area." })
             ])])
         ]));
 
@@ -5115,6 +5134,11 @@ if (typeof module !== "undefined") { module.exports = H3; }
         updateLiveReadouts();
     }
 
+    // rev M: the label's round handles, as they look on the label, for the Position hint
+    var HICON = {
+        move: '<span class="hico" aria-label="move handle"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg></span>',
+        size: '<span class="hico" aria-label="size handle"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l14 14M5 5v6M5 5h6M19 19v-6M19 19h-6"/></svg></span>'
+    };
     function subtitleFor(el) {
         switch (el.type) {
             case "barcode": return "Generated in H3 · " + Core.symInfo(el.symbology).label;
@@ -5940,6 +5964,12 @@ if (typeof module !== "undefined") { module.exports = H3; }
         cv.addEventListener("pointermove", onMove);
         cv.addEventListener("pointerup", onUp);
         cv.addEventListener("pointercancel", onUp);
+        // rev M: fingers move and resize items (a swipe still scrolls the page)
+        cv.addEventListener("touchstart", onTouchStart, { passive: false });
+        cv.addEventListener("touchmove", onTouchMove, { passive: false });
+        cv.addEventListener("touchend", onTouchEnd, { passive: false });
+        cv.addEventListener("touchcancel", onTouchEnd, { passive: false });
+        cv.addEventListener("contextmenu", function (e) { if (S.touchSeen || S.gest) e.preventDefault(); });   // a long press picks up, no menu
         cv.addEventListener("wheel", function (e) {
             if (!e.ctrlKey) return;
             e.preventDefault();
@@ -5950,6 +5980,15 @@ if (typeof module !== "undefined") { module.exports = H3; }
     function fitView() {
         var r = cv.parentNode.getBoundingClientRect();
         var geo = S.R.geo;
+        if (bigHandles()) {
+            // rev M: on a touch screen the label fills the view, so items are bigger under a finger. Room is left at the sides
+            // and below for the round handles (the band at the top never holds an item).
+            var pad = handleR() + 6, availH = r.height - RULER - pad - 6;
+            S.view.s = Math.max(0.3, Math.min((r.width - RULER - 2 * pad) / geo.w, availH / geo.h));
+            S.view.ox = RULER + (r.width - RULER - geo.w * S.view.s) / 2;
+            S.view.oy = RULER + 6 + (availH - geo.h * S.view.s) / 2;
+            return;
+        }
         var wantW = Math.max(geo.w, geo.headDots) + 60, wantH = geo.h + 50;
         var s = Math.min((r.width - RULER - 20) / wantW, (r.height - RULER - 20) / wantH);
         S.view.s = Math.max(0.3, s);
@@ -6124,16 +6163,53 @@ if (typeof module !== "undefined") { module.exports = H3; }
                     ctx.setLineDash([4, 3]); ctx.strokeStyle = "rgba(242,106,27,0.7)"; ctx.lineWidth = 1;
                     ctx.strokeRect(bx + .5, by + .5, bw - 1, bh - 1); ctx.setLineDash([]);
                 }
-                ctx.strokeStyle = "#F26A1B"; ctx.lineWidth = 2;
+                if (S.gest && S.gest.kind !== "pending") { ctx.fillStyle = "rgba(242,106,27,0.13)"; ctx.fillRect(bx, by, bw, bh); }   // rev M: picked up
+                ctx.strokeStyle = "#F26A1B"; ctx.lineWidth = S.gest && S.gest.kind !== "pending" ? 3 : 2;
                 ctx.strokeRect(ox + (it.x + it.built.inkX) * s - 1, oy + (it.y + it.built.inkY) * s - 1, it.built.ink.w * s + 2, it.built.ink.h * s + 2);
-                ctx.fillStyle = "#F26A1B";
-                var hs = 6;
-                [[bx, by], [bx + bw, by], [bx, by + bh], [bx + bw, by + bh]].forEach(function (p) { ctx.fillRect(p[0] - hs / 2, p[1] - hs / 2, hs, hs); });
                 ctx.restore();
             }
         });
 
+        // rev M: the centre line while a move snaps to it; the selected item's round handles (finger-sized on a touch screen)
+        var G = S.gest && S.gest.kind !== "pending" ? S.gest : null, sit = S.selId ? itemFor(S.selId) : null;
+        if (G && G.kind === "move" && G.centred) {
+            ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = "rgba(56,189,248,0.95)"; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(ox + geo.w * s / 2, oy + geo.band * s); ctx.lineTo(ox + geo.w * s / 2, oy + geo.h * s); ctx.stroke(); ctx.restore();
+        }
+        S.handles = null;
+        if (sit) {
+            var big = bigHandles(), HR = handleR(), HH = handleHitR();
+            var fx0 = ox + (sit.x + sit.built.inkX) * s - 1, fy0 = oy + (sit.y + sit.built.inkY) * s - 1;
+            var hs = { id: S.selId, size: { x: fx0 + sit.built.ink.w * s + 2, y: fy0 + sit.built.ink.h * s + 2 }, move: big ? { x: fx0, y: fy0 } : null };
+            if (hs.move) {   // a small item: keep the two handles apart so each can be grabbed
+                var ddx = hs.size.x - hs.move.x, ddy = hs.size.y - hs.move.y, dd = Math.sqrt(ddx * ddx + ddy * ddy), need = 2 * HH + 4;
+                if (dd < need) {
+                    if (dd < 1) { ddx = 1; ddy = 1; dd = Math.SQRT2; }
+                    var k = (need - dd) / 2 / dd;
+                    hs.size.x += ddx * k; hs.size.y += ddy * k; hs.move.x -= ddx * k; hs.move.y -= ddy * k;
+                }
+            }
+            [hs.size, hs.move].forEach(function (q) {   // always on the canvas, where a finger can reach it
+                if (!q) return;
+                q.x = Math.max(RULER + HR + 2, Math.min(r.width - HR - 2, q.x));
+                q.y = Math.max(RULER + HR + 2, Math.min(r.height - HR - 2, q.y));
+            });
+            S.handles = hs;
+            if (hs.move) drawHandle(ctx, hs.move, HR, "move", G && G.kind === "move");
+            drawHandle(ctx, hs.size, HR, "size", G && G.kind !== "move");
+        }
+
         drawRulers(ctx, r, geo);
+        // the readout while moving or resizing (over the top ruler, clear of the label); on a touch screen, a short hint for
+        // a few seconds after an item is selected
+        if (S.hintFor !== S.selId) {
+            S.hintFor = S.selId;
+            S.hintUntil = sit && bigHandles() ? Date.now() + 4500 : 0;
+            if (S.hintUntil) setTimeout(draw, 4600);
+        }
+        var pill = G ? readoutFor(findEl(S.selId), sit, G) : (sit && !S.gest && Date.now() < S.hintUntil ? "Hold and drag to move it" : "");
+        S.pill = pill;
+        if (pill) drawPill(ctx, r, pill, !!G);
         el$("zval").textContent = Math.round(s / physScale() * 100) + " %";
     }
 
@@ -6170,7 +6246,24 @@ if (typeof module !== "undefined") { module.exports = H3; }
         ctx.restore();
     }
 
-    // ---------- pointer interaction ----------
+    // ---------- pointer and finger interaction ----------
+    // Rev M (Ryan 10.16.26: "I want to be able to move and resize elements around easily with my finger on a touch screen
+    // phone. Optimize this for mobile"). On the label:
+    //   swipe                          scrolls the page (rev L: a finger never gets stuck moving things while scrolling)
+    //   tap                            selects the item under the finger (an empty part: nothing selected)
+    //   press and hold, then drag      picks up any item and moves it (the finger held still for 0.3 s)
+    //   drag the move handle           moves the selected item straight away (round handle on its top-left corner)
+    //   drag the size handle           resizes the selected item straight away (round handle on its bottom-right corner)
+    //   two fingers apart or together  resizes the selected item (or the item between the fingers)
+    // A move stops at the edge of the printable area and snaps to the centre line. A resize changes the item's own size
+    // setting (text size, picture width, QR module, bar width and height, box width and height) and stops at the biggest
+    // size that fits where the item is. While a finger is down, a readout at the top of the label shows the position or
+    // the size. The mouse does the same: drag an item to move it, drag the size handle to resize it. One undo step each.
+    var HOLD_MS = 300, SLOP = 10;
+    function bigHandles() { return !!S.touchSeen || touchDevice(); }
+    function handleR() { return bigHandles() ? 16 : 6; }        // drawn radius (css px): 32 px across on a touch screen
+    function handleHitR() { return bigHandles() ? 26 : 10; }    // what a finger can grab: 52 px across
+    function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* no vibration */ } }
     function toDots(e) {
         return { x: (e.offsetX - S.view.ox) / S.view.s, y: (e.offsetY - S.view.oy) / S.view.s };
     }
@@ -6181,17 +6274,26 @@ if (typeof module !== "undefined") { module.exports = H3; }
         }
         return null;
     }
+    /** The handle of the selected item at canvas point (ox, oy): "size", "move" or null (the nearer one wins). */
+    function handleAt(ox, oy) {
+        var H = S.handles; if (!H || !S.selId || H.id !== S.selId) return null;
+        var R2 = handleHitR() * handleHitR(), best = null, bd = Infinity;
+        ["size", "move"].forEach(function (k) {
+            var q = H[k]; if (!q) return;
+            var d = (q.x - ox) * (q.x - ox) + (q.y - oy) * (q.y - oy);
+            if (d <= R2 && d < bd) { bd = d; best = k; }
+        });
+        return best;
+    }
+
+    // mouse and pen
+    function ptOf(e) { return { ox: e.offsetX, oy: e.offsetY, cx: e.clientX, cy: e.clientY }; }
     function onDown(e) {
-        if (e.pointerType === "touch") {
-            // rev L (Ryan 10.16: "there is no reason to move the image around. People are getting lost with their finger stuck
-            // moving the image around while they are trying to scroll down"): a finger never drags or pans the label; it
-            // scrolls the page. A tap (no movement) selects what is under it. Arrows and Centre move items.
-            S.tap = { x: e.clientX, y: e.clientY, ox: e.offsetX, oy: e.offsetY, id: e.pointerId };
-            return;
-        }
+        if (e.pointerType === "touch") return;   // fingers: the touch handlers below
         try { cv.focus({ preventScroll: true }); } catch (err) { cv.focus(); }
-        var p = toDots(e);
-        var it = hit(p);
+        var p = ptOf(e), hd = handleAt(p.ox, p.oy);
+        if (hd) { beginGesture(hd, { start: p, last: p }); cv.setPointerCapture(e.pointerId); return; }
+        var it = hit(toDots(e));
         if (!it) {
             if (S.selId) { S.selId = null; refresh(true); }
             S.pan = { x: e.offsetX, y: e.offsetY, ox: S.view.ox, oy: S.view.oy };
@@ -6199,47 +6301,316 @@ if (typeof module !== "undefined") { module.exports = H3; }
             return;
         }
         if (S.selId !== it.el.id) { S.selId = it.el.id; S.tab = "props"; refresh(true); }
-        S.drag = { sx: e.offsetX, sy: e.offsetY, ex: it.x, ey: it.y, moved: false, wasCenter: it.el.hAlign === "center" };
+        beginGesture("move", { start: p, last: p });
         cv.setPointerCapture(e.pointerId);
     }
     function onMove(e) {
-        if (e.pointerType === "touch") {
-            if (S.tap && Math.abs(e.clientX - S.tap.x) + Math.abs(e.clientY - S.tap.y) > 10) S.tap = null;   // a swipe, not a tap
-            return;
-        }
+        if (e.pointerType === "touch") return;
         if (S.pan) {
             S.view.ox = S.pan.ox + (e.offsetX - S.pan.x); S.view.oy = S.pan.oy + (e.offsetY - S.pan.y); S.view.fit = false;
             draw(); return;
         }
-        if (!S.drag) { cv.style.cursor = hit(toDots(e)) ? "grab" : "default"; return; }
-        cv.style.cursor = "grabbing";
-        var el = findEl(S.selId); var it = itemFor(S.selId);
-        if (!el || !it) return;
-        var tx = S.drag.ex + Math.round((e.offsetX - S.drag.sx) / S.view.s);
-        var ty = S.drag.ey + Math.round((e.offsetY - S.drag.sy) / S.view.s);
-        if (S.drag.wasCenter && Math.abs(tx - S.drag.ex) < 4) tx = it.x; // keep centred on mostly-vertical drags
-        var res = Core.Placement.clampMove(S.R.geo, it.x, it.y, tx, ty, it.w, it.h, Core.Placement.modeFor(it.el));
-        if (res.x !== it.x || res.y !== it.y) {
-            if (res.x !== it.x) el.hAlign = "none";
-            el.x = res.x; el.y = res.y; S.drag.moved = true;
-            refresh(false);
-        }
+        if (S.gest) { cv.style.cursor = S.gest.kind === "size" ? "nwse-resize" : "grabbing"; gestureTo(ptOf(e)); return; }
+        var hd = handleAt(e.offsetX, e.offsetY);
+        cv.style.cursor = hd === "size" ? "nwse-resize" : (hd || hit(toDots(e)) ? "grab" : "default");
     }
     function onUp(e) {
-        if (e.pointerType === "touch") {
-            var t = S.tap; S.tap = null;
-            if (!t || e.type === "pointercancel" || Math.abs(e.clientX - t.x) + Math.abs(e.clientY - t.y) > 10) return;
-            var it = hit(toDots({ offsetX: t.ox, offsetY: t.oy }));
-            if (it && S.selId !== it.el.id) { S.selId = it.el.id; S.tab = "props"; refresh(true); }
+        if (e.pointerType === "touch") return;
+        if (S.pan) { S.pan = null; return; }
+        if (S.gest) { endGesture(); cv.style.cursor = "default"; }
+    }
+
+    // fingers (touch events, so a move or resize can stop the page from scrolling once it has started)
+    function touchPt(t) { var r = cv.getBoundingClientRect(); return { ox: t.clientX - r.left, oy: t.clientY - r.top, cx: t.clientX, cy: t.clientY }; }
+    function touchById(list, id) { for (var i = 0; i < list.length; i++) if (list[i].identifier === id) return list[i]; return null; }
+    function onTouchStart(e) {
+        S.touchSeen = true;
+        var G = S.gest;
+        if (e.touches.length >= 2) {
+            if (G && G.kind !== "pending") return;          // a second finger during a move or resize: ignored
+            if (G) clearTimeout(G.timer);
+            S.gest = null;
+            startPinch(e);
+            return;
+        }
+        var t = e.changedTouches[0], p = touchPt(t);
+        G = { kind: "pending", start: p, last: p, id: t.identifier };
+        S.gest = G;
+        var hd = handleAt(p.ox, p.oy);
+        if (hd) { if (e.cancelable) e.preventDefault(); beginGesture(hd, G); return; }   // a handle works straight away
+        var it = hit(toDots({ offsetX: p.ox, offsetY: p.oy }));
+        if (it) G.timer = setTimeout(function () { pickUp(G, it.el.id); }, HOLD_MS);
+    }
+    /** The finger has been held still on an item: pick it up (select it) and move it with the finger. */
+    function pickUp(G, id) {
+        if (S.gest !== G || G.kind !== "pending" || !findEl(id)) return;
+        if (S.selId !== id) { S.selId = id; S.tab = "props"; refresh(true); }
+        buzz(12);
+        beginGesture("move", G);
+    }
+    function onTouchMove(e) {
+        var G = S.gest; if (!G) return;
+        if (G.kind === "pinch") { if (e.cancelable) e.preventDefault(); pinchTo(e); return; }
+        var t = touchById(e.touches, G.id); if (!t) return;
+        var p = touchPt(t);
+        if (G.kind === "pending") {
+            if (Math.abs(p.cx - G.start.cx) + Math.abs(p.cy - G.start.cy) > SLOP) { clearTimeout(G.timer); S.gest = null; }   // a swipe: the page scrolls
+            else G.last = p;
+            return;
+        }
+        if (e.cancelable) e.preventDefault();               // moving or resizing: the page stays still
+        gestureTo(p);
+    }
+    function onTouchEnd(e) {
+        var G = S.gest; if (!G) return;
+        if (G.kind === "pinch") { if (e.touches.length < 2) { if (e.cancelable) e.preventDefault(); endGesture(); } return; }
+        if (touchById(e.touches, G.id)) return;              // another finger lifted; this one is still down
+        clearTimeout(G.timer);
+        if (G.kind === "pending") {                          // a tap: select what is under the finger
+            S.gest = null;
+            if (e.type === "touchcancel") return;
+            var it = hit(toDots({ offsetX: G.start.ox, offsetY: G.start.oy }));
+            if (it && S.selId !== it.el.id) select(it.el.id);
             else if (!it && S.selId) { S.selId = null; refresh(true); }
             return;
         }
-        if (S.pan) { S.pan = null; return; }
-        if (!S.drag) return;
-        var moved = S.drag.moved;
-        S.drag = null;
-        cv.style.cursor = "default";
-        if (moved) commit(); else draw();
+        if (e.cancelable) e.preventDefault();
+        endGesture();
+    }
+    function startPinch(e) {
+        var a = touchPt(e.touches[0]), b = touchPt(e.touches[1]);
+        var id = S.selId && itemFor(S.selId) ? S.selId : null;
+        if (!id) { var it = hit(toDots({ offsetX: (a.ox + b.ox) / 2, offsetY: (a.oy + b.oy) / 2 })); id = it ? it.el.id : null; }
+        if (!id || !e.cancelable) return;                    // nothing to resize: two fingers scroll the page
+        e.preventDefault();
+        if (S.selId !== id) { S.selId = id; S.tab = "props"; refresh(true); }
+        beginGesture("pinch", { start: a, last: a, ids: [e.touches[0].identifier, e.touches[1].identifier],
+                                d0: Math.max(24, Math.hypot(a.ox - b.ox, a.oy - b.oy)) });
+    }
+    function pinchTo(e) {
+        var G = S.gest, ta = touchById(e.touches, G.ids[0]), tb = touchById(e.touches, G.ids[1]);
+        if (!ta || !tb) return;
+        var a = touchPt(ta), b = touchPt(tb);
+        gestureTo({ f: Math.hypot(a.ox - b.ox, a.oy - b.oy) / G.d0 });
+    }
+
+    // the gesture: one move or resize of the selected item, one undo step
+    function beginGesture(kind, G) {
+        var el = findEl(S.selId), it = itemFor(S.selId);
+        if (!el || !it) { S.gest = null; return; }
+        clearTimeout(G.timer);
+        G.kind = kind; G.changed = false; G.limited = false; G.end = ""; G.centred = el.hAlign === "center";
+        G.el0 = JSON.parse(JSON.stringify(el, function (k, v) { return k === "src" ? undefined : v; }));   // a picture's grey levels aren't needed
+        G.it0 = { x: it.x, y: it.y, w: it.w, h: it.h, info: it.built.info };
+        if (el.type === "picture") G.asp = pictureAspect(el);
+        S.gest = G; S.drag = true;
+        draw();
+    }
+    function gestureTo(p) {
+        var G = S.gest; if (!G || G.kind === "pending") return;
+        G.next = p;
+        if (!G.raf) G.raf = requestAnimationFrame(function () { G.raf = 0; applyGesture(G); });
+    }
+    function applyGesture(G) {
+        var p = G.next; G.next = null;
+        if (!p || S.gest !== G) return;
+        if (G.kind === "move") gestureMove(G, p); else gestureSize(G, p);
+    }
+    function endGesture() {
+        var G = S.gest; if (!G) return;
+        if (G.raf) { cancelAnimationFrame(G.raf); G.raf = 0; }
+        if (G.next) applyGesture(G);
+        S.gest = null; S.drag = null;
+        var el = findEl(S.selId);
+        if (G.changed && el) {
+            var what = G.kind === "move" ? "" : readoutFor(el, itemFor(el.id), G).split(" · ")[0];
+            if (el.type === "picture") setPictureSize(el, el.w);   // the stored picture is made again at its new size
+            if (el.type === "qr") { if (!S.qrPref) S.qrPref = {}; S.qrPref[el.id] = Core.qrModuleDots(el, S.eng); }
+            addLog((G.kind === "move" ? "Moved " : "Resized ") + Core.elementName(el) + (what ? ": " + what : "") + ".");
+            commit();
+        } else draw();
+    }
+    function gestureMove(G, p) {
+        var el = findEl(S.selId), it = itemFor(S.selId); if (!el || !it) return;
+        var geo = S.R.geo, s = S.view.s;
+        var tx = G.it0.x + Math.round((p.ox - G.start.ox) / s), ty = G.it0.y + Math.round((p.oy - G.start.oy) / s);
+        var cx = Math.round((geo.w - it.w) / 2);
+        if (Math.abs(tx - cx) <= Math.max(2, Math.round(9 / s))) tx = cx;      // snaps to the centre line within 9 px
+        var res = Core.Placement.clampMove(geo, it.x, it.y, tx, ty, it.w, it.h, Core.Placement.modeFor(el));
+        var centred = res.x === cx;
+        if (centred && !G.centred) buzz(8);
+        G.centred = centred; G.limited = res.x !== tx || res.y !== ty;
+        var align = centred ? "center" : "none";
+        if (res.x !== it.x || res.y !== it.y || align !== (el.hAlign === "center" ? "center" : "none")) {
+            el.x = res.x; el.y = res.y; el.hAlign = align;
+            G.changed = true;
+            refresh(false);
+        } else draw();
+    }
+    function gestureSize(G, p) {
+        var el = findEl(S.selId); if (!el) return;
+        var s = S.view.s, a = G.it0, f, fx, fy, dx, dy;
+        if (G.kind === "pinch") {
+            f = Math.max(0.05, p.f); fx = fy = f; dx = a.w * (f - 1); dy = a.h * (f - 1);
+        } else {
+            dx = (p.ox - G.start.ox) / s; dy = (p.oy - G.start.oy) / s;
+            if (G.el0.hAlign === "center") dx *= 2;                        // a centred item grows on both sides
+            var w1 = Math.max(1, a.w + dx), h1 = Math.max(1, a.h + dy);
+            f = Math.max(0.05, (w1 * a.w + h1 * a.h) / (a.w * a.w + a.h * a.h));   // along the item's diagonal
+            fx = w1 / a.w; fy = h1 / a.h;
+        }
+        var key = sizeKey(el);
+        resizeEl(el, G, f, fx, fy, dx, dy);
+        if (sizeKey(el) !== key) { G.changed = true; refresh(false); } else draw();
+    }
+    function sizeKey(el) { return [el.sizePt, el.w, el.h, el.moduleDots, el.xDots, el.heightDots, el.x, el.y].join("|"); }
+    /** Where the item goes at size w x h, or null if it doesn't fit there. The size handle keeps the top-left corner where
+     *  it is (a centred item stays centred); two fingers keep the middle, nudged in from the edges. */
+    function placeFor(G, w, h) {
+        var geo = S.R.geo, a = G.it0, mode = Core.Placement.modeFor(G.el0), x = a.x, y = a.y;
+        if (G.kind === "pinch") {
+            var yMin = mode === "box" ? geo.band : geo.band + geo.margin;
+            x = Math.max(0, Math.min(geo.w - w, Math.round(a.x + a.w / 2 - w / 2)));
+            y = Math.max(yMin, Math.min(geo.h - h, Math.round(a.y + a.h / 2 - h / 2)));
+        }
+        if (G.el0.hAlign === "center") x = Math.round((geo.w - w) / 2);
+        return Core.Placement.fits(geo, x, y, w, h, mode) ? { x: x, y: y } : null;
+    }
+    function stepsBetween(v0, vT, step) {
+        var n = Math.round((vT - v0) / step), sg = n < 0 ? -1 : 1, out = [];
+        for (var i = 0; i <= Math.abs(n); i++) out.push(Math.round((v0 + sg * i * step) * 2) / 2);
+        return out;
+    }
+    /** The furthest of vals (vals[0] = the size when the finger went down, the last = the size the finger asks for) that
+     *  fits where the item is. A bigger size's box holds the smaller one's, so a binary search finds it. */
+    function furthestFit(G, vals, boxOf) {
+        var memo = {};
+        function ok(i) { if (!(i in memo)) { var b = boxOf(vals[i]); memo[i] = b && placeFor(G, b.w, b.h) ? b : null; } return memo[i]; }
+        var last = vals.length - 1;
+        if (ok(last)) return { v: vals[last], box: memo[last], limited: false };
+        if (!ok(0)) return { v: vals[last], box: boxOf(vals[last]), limited: false };   // it didn't fit before either: the checks say so
+        var lo = 0, hi = last;
+        while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (ok(mid)) lo = mid; else hi = mid; }
+        return { v: vals[lo], box: memo[lo], limited: true };
+    }
+    function clampNum(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    function picBox(w, asp, pc) { var cw = Math.max(4, Math.round(w / pc)), ch = Math.max(4, Math.round(cw * asp)); return { w: cw * pc, h: ch * pc }; }
+    /** Resize from a finger: f = how much bigger along the item's diagonal, fx / fy across and down, dx / dy in dots. Each
+     *  type changes its own size setting, in its own steps. Sets G.limited (stopped at the biggest that fits) and G.end
+     *  (at the smallest or largest engineering allows). */
+    function resizeEl(el, G, f, fx, fy, dx, dy) {
+        var e0 = G.el0, eng = S.eng, geo = S.R.geo, pinch = G.kind === "pinch", r, r2, box, raw;
+        function tryEl(patch) { return function (v) { var t = {}; for (var k in e0) t[k] = e0[k]; patch(t, v); return measure(S.doc, t); }; }
+        G.end = "";
+        if (e0.type === "text" || e0.type === "plu" || e0.type === "field") {
+            raw = Math.round(e0.sizePt * f * 2) / 2;
+            var pt = clampNum(raw, eng.text.minPt, eng.text.maxPt);
+            if (pt !== raw) G.end = raw < pt ? "smallest allowed" : "largest allowed";
+            r = furthestFit(G, stepsBetween(e0.sizePt, pt, 0.5), tryEl(function (t, v) { t.sizePt = v; }));
+            el.sizePt = r.v; box = r.box;
+        } else if (e0.type === "picture") {
+            var pc = Core.pictureCellDots(eng), maxW = Math.floor(Math.min(geo.w, geo.headDots) / pc) * pc;
+            raw = Math.round(e0.w * f / pc) * pc;
+            var pw = clampNum(raw, 4 * pc, maxW);
+            if (raw < pw) G.end = "smallest allowed";
+            r = furthestFit(G, stepsBetween(e0.w, pw, pc), function (v) { return picBox(v, G.asp, pc); });
+            box = picBox(r.v, G.asp, pc); el.w = box.w; el.h = box.h;   // the grey picture is made again when the finger lifts
+        } else if (e0.type === "qr") {
+            var mr = Core.qrModuleRange(eng), m0 = Core.qrModuleDots(e0, eng);
+            raw = Math.round(m0 * f);
+            var mt = clampNum(raw, mr.min, mr.max);
+            if (mt !== raw) G.end = raw < mt ? "smallest allowed" : "largest allowed";
+            r = furthestFit(G, stepsBetween(m0, mt, 1), tryEl(function (t, v) { t.moduleDots = v; }));
+            el.moduleDots = r.v; box = r.box;
+        } else if (e0.type === "barcode") {
+            // across: bar width (whole or half dots, as engineering allows); down: bar height
+            var inf = G.it0.info, xs = Core.xValues(e0.symbology, eng), x0 = inf.xDots, want = x0 * fx, xt = x0;
+            xs.forEach(function (v) { if (Math.abs(v - want) < Math.abs(xt - want)) xt = v; });
+            var xl = xs.filter(function (v) { return (v - x0) * (xt - x0) >= 0 && Math.abs(v - x0) <= Math.abs(xt - x0); });
+            xl.sort(function (p, q) { return Math.abs(p - x0) - Math.abs(q - x0); });
+            r = furthestFit(G, xl, tryEl(function (t, v) { t.xDots = v; }));
+            var e1 = {}; for (var k1 in e0) e1[k1] = e0[k1]; e1.xDots = r.v;
+            var ci = measure(S.doc, e1).info, h0 = ci.heightDots, ht;
+            var dataBar = Core.symInfo(e0.symbology).family === "databar";
+            var lo = dataBar ? Math.max(ci.minHeightDots, Math.min(ci.smallestHeightDots, h0)) : ci.minHeightDots;
+            var hi = dataBar ? ci.fullHeightDots : 100000;
+            raw = Math.round(h0 + (pinch ? h0 * (f - 1) : dy));
+            ht = clampNum(raw, lo, hi);
+            if (ht !== raw) G.end = raw < ht ? "shortest allowed" : (dataBar ? "full height" : "");
+            var hval = function (v) { return dataBar ? (v >= hi ? 0 : v) : (v <= ci.minHeightDots ? 0 : v); };
+            r2 = furthestFit(G, stepsBetween(h0, ht, 1), function (v) { var t = {}; for (var k2 in e1) t[k2] = e1[k2]; t.heightDots = hval(v); return measure(S.doc, t); });
+            el.xDots = r.v; el.heightDots = hval(r2.v); box = r2.box;
+            r = { limited: r.limited || r2.limited };
+        } else if (e0.type === "shape") {
+            var st = Math.max(eng.shape.minStrokeDots, e0.strokeDots | 0), w0 = e0.w | 0, h0s = e0.h | 0;
+            var sbox = function (w, hh) {
+                if (e0.kind === "hline") return { w: Math.max(st, w), h: st };
+                if (e0.kind === "vline") return { w: st, h: Math.max(st, hh) };
+                return { w: Math.max(2 * st + 1, w), h: Math.max(2 * st + 1, hh) };
+            };
+            var wt = e0.kind === "vline" ? w0 : Math.max(10, Math.round(pinch ? w0 * f : w0 + dx));
+            var htt = e0.kind === "hline" ? h0s : Math.max(10, Math.round(pinch ? h0s * f : h0s + dy));
+            r = furthestFit(G, stepsBetween(w0, wt, 1), function (v) { return sbox(v, h0s); });
+            r2 = furthestFit(G, stepsBetween(h0s, htt, 1), function (v) { return sbox(r.v, v); });
+            el.w = r.v; el.h = r2.v; box = sbox(r.v, r2.v);
+            r = { limited: r.limited || r2.limited };
+        } else return;
+        G.limited = r.limited;
+        if (pinch && box) { var pl = placeFor(G, box.w, box.h); if (pl) { el.x = pl.x; el.y = pl.y; } }
+    }
+    /** What the readout at the top of the label says while a finger (or the mouse) moves or resizes the item. */
+    function readoutFor(el, it, G) {
+        if (!el || !it) return "";
+        if (G.kind === "move") {
+            return (el.hAlign === "center" ? "Centred" : fmtLen(it.x) + " across") + " · " + fmtLen(it.y) + " down" + (G.limited ? " · at the edge" : "");
+        }
+        var inf = it.built.info, t;
+        switch (el.type) {
+            case "text": case "plu": case "field": t = "Size " + el.sizePt.toFixed(1) + " pt"; break;
+            case "picture": t = fmtLen(el.w) + " × " + fmtLen(el.h); break;
+            case "qr": t = "Modules " + inf.dotsPerModule + " dots · " + fmtLen(inf.size * inf.dotsPerModule); break;
+            case "barcode": t = "Bars " + halfLabel(inf.xDots) + " dots · " + fmtLen(inf.heightDots) + " tall"; break;
+            case "shape": t = el.kind === "hline" ? fmtLen(it.w) + " long" : (el.kind === "vline" ? fmtLen(it.h) + " long" : fmtLen(it.w) + " × " + fmtLen(it.h)); break;
+            default: t = fmtLen(it.w) + " × " + fmtLen(it.h);
+        }
+        return t + (G.limited ? " · as big as fits here" : (G.end ? " · " + G.end : ""));
+    }
+    /** A round handle: orange with a white ring, and a white move (four arrows) or size (diagonal arrow) sign. */
+    function drawHandle(ctx, q, r, kind, active) {
+        ctx.save();
+        ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
+        ctx.beginPath(); ctx.arc(q.x, q.y, active ? r + 2 : r, 0, Math.PI * 2);
+        ctx.fillStyle = active ? "#FF8A3D" : "#F26A1B"; ctx.fill();
+        ctx.shadowColor = "transparent";
+        ctx.lineWidth = 2; ctx.strokeStyle = "#FFFFFF"; ctx.stroke();
+        if (r >= 10) {
+            var k = r * 0.62, a = r * 0.2;
+            ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath();
+            var dirs = kind === "move" ? [[1, 0], [-1, 0], [0, 1], [0, -1]] : [[0.72, 0.72], [-0.72, -0.72]];
+            dirs.forEach(function (d) {
+                var tx = q.x + d[0] * k, ty = q.y + d[1] * k;
+                ctx.moveTo(q.x, q.y); ctx.lineTo(tx, ty);
+                ctx.moveTo(tx - d[0] * a - d[1] * a, ty - d[1] * a + d[0] * a); ctx.lineTo(tx, ty); ctx.lineTo(tx - d[0] * a + d[1] * a, ty - d[1] * a - d[0] * a);
+            });
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+    /** The readout (or, on a touch screen, a short hint) at the top of the label. */
+    function drawPill(ctx, r, txt, active) {
+        ctx.save();
+        ctx.font = "700 13px Inter, Arial, sans-serif";
+        var maxW = r.width - RULER - 8, tw = ctx.measureText(txt).width;
+        while (tw + 22 > maxW && txt.length > 8) { txt = txt.slice(0, -2) + "…"; tw = ctx.measureText(txt).width; }
+        var w = tw + 22, hh = 24, x = RULER + (r.width - RULER - w) / 2, y = 0, rad = 12;
+        ctx.beginPath();
+        ctx.moveTo(x + rad, y); ctx.lineTo(x + w - rad, y); ctx.arcTo(x + w, y, x + w, y + rad, rad); ctx.arcTo(x + w, y + hh, x + w - rad, y + hh, rad);
+        ctx.lineTo(x + rad, y + hh); ctx.arcTo(x, y + hh, x, y + hh - rad, rad); ctx.arcTo(x, y, x + rad, y, rad); ctx.closePath();
+        ctx.fillStyle = active ? "rgba(11,16,32,0.94)" : "rgba(11,16,32,0.78)"; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = active ? "#F26A1B" : "rgba(148,163,184,0.55)"; ctx.stroke();
+        ctx.fillStyle = active ? "#FFFFFF" : "#CBD5E1"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(txt, x + w / 2, y + hh / 2 + 0.5);
+        ctx.restore();
     }
 
     // =================================================================================================
