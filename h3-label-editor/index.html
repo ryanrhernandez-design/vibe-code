@@ -333,6 +333,14 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
 html, body, * { touch-action: pan-x pan-y; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .canvaswrap { touch-action: none; }
+/* rev L: a finger on the label scrolls the page (only a mouse drags items) */
+@media (pointer: coarse), (max-width: 1060px) { .canvaswrap, .canvaswrap canvas { touch-action: pan-x pan-y; } }
+/* rev L (Ryan 10.16: "Make the font bigger/more noticeable of what each section is"): section names stand out */
+.props .lbl { font-size: 13px; font-weight: 800; letter-spacing: .05em; color: var(--text); align-items: baseline; }
+.props .lbl::before { content: ""; width: 4px; align-self: stretch; border-radius: 2px; background: var(--accent); margin-right: 8px; flex: none; }
+.props .lbl { justify-content: flex-start; }
+.props .lbl .v { margin-left: auto; font-size: 12px; color: var(--muted); }
+.panel-title { font-size: 12.5px; color: var(--text); }
 @media (max-width: 1060px) {
   .inp, input, select, textarea { font-size: 16px !important; }
   .main > .stage { position: sticky; top: 0; z-index: 6; box-shadow: 0 10px 22px rgba(3, 6, 14, .55); }
@@ -341,6 +349,21 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .stage .zoombar { padding: 6px 8px; }
   .stage .statusstrip { max-height: 66px; padding: 6px 10px; }
   .props * { scroll-margin-top: calc(34vh + 150px); }   /* a box scrolled into view lands below the pinned label */
+  /* rev L (Ryan 10.16: "all of the elements need to be shown on 1 screen"): every Add button visible at once, no sideways scroll */
+  .addrail { display: grid; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); overflow: visible; }
+  .addbtn { min-width: 0; min-height: 66px; font-size: 13px; }
+  .addbtn svg { width: 24px; height: 24px; }
+  .elist { max-height: none; overflow: visible; }                 /* every item on the label listed, no inner scroll */
+  .erow .t1 { font-size: 15px; } .erow .t2 { font-size: 13px; }
+  .props { font-size: 15px; gap: 16px; }
+  .props .lbl { font-size: 15.5px; }
+  .props .lbl .v { font-size: 13px; }
+  .props .hint { font-size: 13.5px; }
+  .props > .sec + .sec { border-top: 1px solid var(--border); padding-top: 14px; }
+  .phead .ttl { font-size: 19px; } .phead .sub { font-size: 13px; }
+  .seg button { font-size: 15px; min-height: 44px; }
+  .stepper .val { font-size: 16px; }
+  .panel-title { font-size: 14px; }
 }
 @media (max-width: 1060px) and (max-height: 520px) {
   .main > .stage { position: static; box-shadow: none; }   /* a phone on its side: too short to keep the label pinned */
@@ -437,7 +460,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <button class="btn" id="btnLang" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>English</button>
     <button class="btn" id="btnExit" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>Exit</button>
   </nav>
-  <div class="foot"><span>Label Editor simulator rev K &middot; DRAFT 2026-10-16 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
+  <div class="foot"><span>Label Editor simulator rev L &middot; DRAFT 2026-10-16 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -3507,7 +3530,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Editor simulator - user interface (browser only).
- * DRAFT - Hurst International, rev K, 2026-10-16 (rev J 2026-10-16; rev I 2026-10-15; rev H 2026-10-07; revs G, F, E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
+ * DRAFT - Hurst International, rev L, 2026-10-16 (revs J, K 2026-10-16; rev I 2026-10-15; rev H 2026-10-07; revs G, F, E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
  *
  * The UI only calls H3.Core / H3.Gs1 / H3.DataBar / H3.Qr (the portable core). In H3 this layer is rebuilt
  * in the C# UI toolkit; the behaviour (flows, prompts, fixes, lane simulation) is described in the port guide.
@@ -4904,6 +4927,22 @@ if (typeof module !== "undefined") { module.exports = H3; }
     // =================================================================================================
     // Selection, add, move, delete
     // =================================================================================================
+    /** Rev L: on a phone, bring the selected item's first settings (for a picture: Size) on screen, just below the pinned
+     *  label, right after it is placed. */
+    function revealSettings() {
+        if (window.innerWidth > 1060) return;
+        setTimeout(function () {
+            var t = el$("secSize") || document.querySelector("#props .sec:not(#propErrs)") || el$("props");
+            if (t) showBelowPinned(t, true);
+        }, 60);
+    }
+    /** Phone: scroll so `node` sits just below the pinned label (top = put it right there; otherwise only if it is hidden). */
+    function showBelowPinned(node, top) {
+        var st = document.querySelector(".main > .stage");
+        var pinned = (st && getComputedStyle(st).position === "sticky") ? st.getBoundingClientRect().height : 0;
+        var r = node.getBoundingClientRect(), gap = 10;
+        if (top || r.top < pinned + gap || r.bottom > window.innerHeight) window.scrollBy(0, r.top - pinned - gap);
+    }
     function select(id) {
         S.selId = id; S.tab = "props";
         refresh(true);
@@ -4930,6 +4969,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         S.selId = el.id; S.tab = "props";
         addLog("Added " + Core.elementName(el) + (type === "barcode" ? " (" + Core.symInfo(el.symbology).label + ")" : "") + ".");
         commit();
+        if (type === "shape") revealSettings();   // the others put the cursor in their data box, which brings it on screen
         if (!s) toast("There is no free space for it. Move or shrink something.", true);
         // ready to type: the data box gets the focus
         if (type === "barcode" && Core.dataSource(el) === "typed") focusSoon("f-bcdata");
@@ -5000,8 +5040,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
                                  text: o.label, onclick: function () { onPick(o.value); } });
         }));
     }
-    function sec(label, valueNote, kids) {
-        return h("div", { class: "sec" }, [h("div", { class: "lbl" }, [label, valueNote ? h("span", { class: "v", text: valueNote }) : null])].concat(kids));
+    function sec(label, valueNote, kids, id) {
+        return h("div", { class: "sec", id: id || null }, [h("div", { class: "lbl" }, [label, valueNote ? h("span", { class: "v", text: valueNote }) : null])].concat(kids));
     }
     function lockNote(textStr) { return h("div", { class: "locknote", html: icon("lock") + "<span>" + textStr + "</span>" }); }
 
@@ -5056,7 +5096,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         box.appendChild(sec("Position", "each tap moves " + fmtLen(S.eng.nudgeDots) + " (" + S.eng.nudgeDots + " dots)", [
             h("div", { class: "posgrid" }, [pos, h("div", { class: "sec" }, [
                 h("button", { class: "btn" + (el.hAlign === "center" ? " sel" : ""), type: "button", html: icon("center") + "Centre", onclick: centerAcross }),
-                h("div", { class: "hint", text: "Or drag it on the label. It stops at the edge of the printable area." })
+                h("div", { class: "hint", text: touchDevice() ? "Tap the arrows to move it a little at a time." : "Or drag it on the label. It stops at the edge of the printable area." })
             ])])
         ]));
 
@@ -5447,7 +5487,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             }
         });
     }
-    function focusSoon(id) { setTimeout(function () { var f = el$(id); if (f) { f.focus(); try { var n = f.value.length; f.setSelectionRange(n, n); } catch (e) { } } }, 30); }
+    function focusSoon(id) { setTimeout(function () { var f = el$(id); if (f) { f.focus(); try { var n = f.value.length; f.setSelectionRange(n, n); } catch (e) { } if (window.innerWidth <= 1060) showBelowPinned(f.closest(".sec") || f, false); } }, 30); }
 
     // =================================================================================================
     // Rev J: Picture - a photo taken on the phone (or a picture file), printed direct thermal as dots
@@ -5614,6 +5654,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             addLog("Picture changed (" + el.w + " × " + el.h + " dots).");
             S.selId = el.id; S.tab = "props";
             commit();
+            revealSettings();
             return;
         }
         var probe = Core.newElement("picture", S.eng, {});
@@ -5631,6 +5672,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         S.selId = probe.id; S.tab = "props";
         addLog("Added Picture (" + (probe.look === "drawing" ? "drawing or logo" : "photo") + ", " + probe.w + " × " + probe.h + " dots).");
         commit();
+        revealSettings();
         toast(free ? "Picture added. It prints as dots, exactly as shown." : "Picture added, but there is no free space for it: move or shrink something.", !free);
     }
     /** Add > Picture: take a photo (phones and tablets) or choose a picture. replaceId = put a new photo into that picture. */
@@ -5775,27 +5817,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
     }
     function propsPicture(box, el, it) {
         var has = !!Core.pictureSource(el.src);
-        box.appendChild(sec("Picture", has ? el.src.w + " × " + el.src.h + " px kept" : null, [
-            has ? h("div", { class: "picrow" }, [pictureThumb(el, 132, 110), h("div", { class: "hint", text: "This is the picture as the label keeps it. The label on the left shows the dots that print." })]) : null,
-            h("div", { class: "row wrap" }, [
-                touchDevice() ? h("button", { class: "btn" + (has ? "" : " primary"), type: "button", id: "f-pic", html: icon("camera") + (has ? "New photo" : "Take a photo"), onclick: function () {
-                    pickImageFile(true, function (c) { openCropDialog(c, null, el.id); }); } }) : null,
-                h("button", { class: "btn" + (has || touchDevice() ? "" : " primary"), type: "button", id: touchDevice() ? "pic-other" : "f-pic", html: icon("picture") + (has ? "Another picture" : "Choose a picture"), onclick: function () {
-                    pickImageFile(false, function (c) { openCropDialog(c, null, el.id); }); } }),
-                has ? h("button", { class: "btn", type: "button", id: "pic-crop", html: icon("crop") + "Crop or turn", onclick: function () { recropPicture(el); } }) : null
-            ])
-        ]));
-        box.appendChild(sec("Look", null, [seg([{ value: "photo", label: "Photo" }, { value: "drawing", label: "Drawing or logo" }], el.look,
-            function (v) { el.look = v; commit(); }),
-            h("div", { class: "hint", text: el.look === "drawing" ? "Sharp black and white. Best for logos, signs and line drawings." : "Dots spread out to show the greys. Best for photos." })]));
         var b = el.bright || 0, c = el.contrast || 0;
-        box.appendChild(sec("Lighter or darker", null, [stepper("picBright", b === 0 ? "As taken" : (b > 0 ? "Lighter +" + b : "Darker " + (-b)), null,
-            function () { el.bright = Math.max(-100, b - 10); commit(); }, function () { el.bright = Math.min(100, b + 10); commit(); }, b <= -100, b >= 100),
-            h("div", { class: "hint", text: "− darker, + lighter. Thermal labels print a little darker than the screen: if the test print looks heavy, go lighter." })]));
-        box.appendChild(sec("Contrast", null, [stepper("picContrast", c === 0 ? "Normal" : (c > 0 ? "More +" + c : "Less " + (-c)), null,
-            function () { el.contrast = Math.max(-50, c - 10); commit(); }, function () { el.contrast = Math.min(100, c + 10); commit(); }, c <= -50, c >= 100)]));
-        box.appendChild(sec("Black and white", null, [seg([{ value: false, label: "Normal" }, { value: true, label: "Reversed" }], !!el.invert,
-            function (v) { el.invert = v; commit(); })]));
+        // rev L (Ryan 10.16: "I want the resize of the element to show up on the screen right when you place it"): Size comes first
         var pc = Core.pictureCellDots(S.eng), step = Math.max(pc, Math.round(0.05 * S.eng.dpi / pc) * pc);
         var bigger = JSON.parse(JSON.stringify(el)); bigger.w = el.w + step; bigger.h = Math.max(4, Math.round((el.w + step) / pc * pictureAspect(el))) * pc;
         box.appendChild(sec("Size", fmtLenShort(it.w) + " × " + fmtLen(it.h), [
@@ -5807,11 +5830,31 @@ if (typeof module !== "undefined") { module.exports = H3; }
                 h("button", { class: "btn small", type: "button", id: "pic-biggest", text: "Biggest that fits", onclick: function () {
                     var f = pictureBiggest(el, true, S.R.geo.w);
                     if (!f) { toast("There is no free space to make it bigger. Move or shrink something.", true); return; }
-                    setPictureSize(el, f.w); el.x = f.x; el.y = f.y; el.hAlign = "none"; commit(); } }),
-                (b || c || el.invert) ? h("button", { class: "btn small", type: "button", id: "pic-reset", text: "Back to as taken", onclick: function () {
-                    el.bright = 0; el.contrast = 0; el.invert = false; commit(); } }) : null
+                    setPictureSize(el, f.w); el.x = f.x; el.y = f.y; el.hAlign = "none"; commit(); } })
+            ])
+        ], "secSize"));
+        box.appendChild(sec("Picture", has ? el.src.w + " × " + el.src.h + " px kept" : null, [
+            has ? h("div", { class: "picrow" }, [pictureThumb(el, 132, 110), h("div", { class: "hint", text: "This is the picture as the label keeps it. The label above shows the dots that print." })]) : null,
+            h("div", { class: "row wrap" }, [
+                touchDevice() ? h("button", { class: "btn" + (has ? "" : " primary"), type: "button", id: "f-pic", html: icon("camera") + (has ? "New photo" : "Take a photo"), onclick: function () {
+                    pickImageFile(true, function (cv2) { openCropDialog(cv2, null, el.id); }); } }) : null,
+                h("button", { class: "btn" + (has || touchDevice() ? "" : " primary"), type: "button", id: touchDevice() ? "pic-other" : "f-pic", html: icon("picture") + (has ? "Another picture" : "Choose a picture"), onclick: function () {
+                    pickImageFile(false, function (cv2) { openCropDialog(cv2, null, el.id); }); } }),
+                has ? h("button", { class: "btn", type: "button", id: "pic-crop", html: icon("crop") + "Crop or turn", onclick: function () { recropPicture(el); } }) : null
             ])
         ]));
+        box.appendChild(sec("Look", null, [seg([{ value: "photo", label: "Photo" }, { value: "drawing", label: "Drawing or logo" }], el.look,
+            function (v) { el.look = v; commit(); }),
+            h("div", { class: "hint", text: el.look === "drawing" ? "Sharp black and white. Best for logos, signs and line drawings." : "Dots spread out to show the greys. Best for photos." })]));
+        box.appendChild(sec("Lighter or darker", null, [stepper("picBright", b === 0 ? "As taken" : (b > 0 ? "Lighter +" + b : "Darker " + (-b)), null,
+            function () { el.bright = Math.max(-100, b - 10); commit(); }, function () { el.bright = Math.min(100, b + 10); commit(); }, b <= -100, b >= 100),
+            h("div", { class: "hint", text: "− darker, + lighter. Thermal labels print a little darker than the screen: if the test print looks heavy, go lighter." })]));
+        box.appendChild(sec("Contrast", null, [stepper("picContrast", c === 0 ? "Normal" : (c > 0 ? "More +" + c : "Less " + (-c)), null,
+            function () { el.contrast = Math.max(-50, c - 10); commit(); }, function () { el.contrast = Math.min(100, c + 10); commit(); }, c <= -50, c >= 100)]));
+        box.appendChild(sec("Black and white", null, [seg([{ value: false, label: "Normal" }, { value: true, label: "Reversed" }], !!el.invert,
+            function (v) { el.invert = v; commit(); }),
+            (b || c || el.invert) ? h("button", { class: "btn small", type: "button", id: "pic-reset", text: "Back to as taken", style: "align-self:flex-start", onclick: function () {
+                el.bright = 0; el.contrast = 0; el.invert = false; commit(); } }) : null]));
     }
 
     function propsShape(box, el) {
@@ -6139,6 +6182,13 @@ if (typeof module !== "undefined") { module.exports = H3; }
         return null;
     }
     function onDown(e) {
+        if (e.pointerType === "touch") {
+            // rev L (Ryan 10.16: "there is no reason to move the image around. People are getting lost with their finger stuck
+            // moving the image around while they are trying to scroll down"): a finger never drags or pans the label; it
+            // scrolls the page. A tap (no movement) selects what is under it. Arrows and Centre move items.
+            S.tap = { x: e.clientX, y: e.clientY, ox: e.offsetX, oy: e.offsetY, id: e.pointerId };
+            return;
+        }
         try { cv.focus({ preventScroll: true }); } catch (err) { cv.focus(); }
         var p = toDots(e);
         var it = hit(p);
@@ -6153,6 +6203,10 @@ if (typeof module !== "undefined") { module.exports = H3; }
         cv.setPointerCapture(e.pointerId);
     }
     function onMove(e) {
+        if (e.pointerType === "touch") {
+            if (S.tap && Math.abs(e.clientX - S.tap.x) + Math.abs(e.clientY - S.tap.y) > 10) S.tap = null;   // a swipe, not a tap
+            return;
+        }
         if (S.pan) {
             S.view.ox = S.pan.ox + (e.offsetX - S.pan.x); S.view.oy = S.pan.oy + (e.offsetY - S.pan.y); S.view.fit = false;
             draw(); return;
@@ -6172,6 +6226,14 @@ if (typeof module !== "undefined") { module.exports = H3; }
         }
     }
     function onUp(e) {
+        if (e.pointerType === "touch") {
+            var t = S.tap; S.tap = null;
+            if (!t || e.type === "pointercancel" || Math.abs(e.clientX - t.x) + Math.abs(e.clientY - t.y) > 10) return;
+            var it = hit(toDots({ offsetX: t.ox, offsetY: t.oy }));
+            if (it && S.selId !== it.el.id) { S.selId = it.el.id; S.tab = "props"; refresh(true); }
+            else if (!it && S.selId) { S.selId = null; refresh(true); }
+            return;
+        }
         if (S.pan) { S.pan = null; return; }
         if (!S.drag) return;
         var moved = S.drag.moved;
