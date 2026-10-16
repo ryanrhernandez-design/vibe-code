@@ -385,6 +385,13 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .stage .canvaswrap { height: 74vh; }   /* a phone on its side: the page scrolls normally, so the label can use the screen */
 }
 
+/* rev N (Ryan 10.16: move and resize "need to be easier to read and understand what they are"): the Position hint shows the
+   MOVE and RESIZE tags as they look on the label */
+.htag { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px 2px 7px; border-radius: 999px; background: var(--accent);
+        border: 2px solid #fff; color: #fff; font-weight: 800; font-size: 12.5px; letter-spacing: .03em; line-height: 18px;
+        vertical-align: middle; margin: -3px 2px 0; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); white-space: nowrap; }
+.htag svg { width: 13px; height: 13px; display: block; flex: none; }
+
 </style>
 </head>
 <body>
@@ -476,7 +483,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <button class="btn" id="btnLang" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>English</button>
     <button class="btn" id="btnExit" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>Exit</button>
   </nav>
-  <div class="foot"><span>Label Editor simulator rev M &middot; DRAFT 2026-10-16 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
+  <div class="foot"><span>Label Editor simulator rev N &middot; DRAFT 2026-10-16 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -5113,9 +5120,9 @@ if (typeof module !== "undefined") { module.exports = H3; }
             h("div", { class: "posgrid" }, [pos, h("div", { class: "sec" }, [
                 h("button", { class: "btn" + (el.hAlign === "center" ? " sel" : ""), type: "button", html: icon("center") + "Centre", onclick: centerAcross }),
                 h("div", { class: "hint movehint", id: "moveHint", html: touchDevice() ?
-                    "On the label: drag " + HICON.move + " to move it, or press and hold it, then drag. Drag " + HICON.size +
+                    "On the label: drag " + HICON.move + " to move it (or press and hold the item, then drag). Drag " + HICON.size +
                     " to make it bigger or smaller, or use two fingers. The arrows move it a little at a time." :
-                    "Or drag it on the label, and drag its round corner handle to resize it. It stops at the edge of the printable area." })
+                    "On the label: drag the item (or " + HICON.move + ") to move it; drag " + HICON.size + " to make it bigger or smaller. It stops at the edge of the printable area." })
             ])])
         ]));
 
@@ -5134,10 +5141,10 @@ if (typeof module !== "undefined") { module.exports = H3; }
         updateLiveReadouts();
     }
 
-    // rev M: the label's round handles, as they look on the label, for the Position hint
+    // rev M / N: the label's MOVE and RESIZE tags, as they look on the label, for the Position hint
     var HICON = {
-        move: '<span class="hico" aria-label="move handle"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg></span>',
-        size: '<span class="hico" aria-label="size handle"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l14 14M5 5v6M5 5h6M19 19v-6M19 19h-6"/></svg></span>'
+        move: '<span class="htag"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>MOVE</span>',
+        size: '<span class="htag"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l14 14M5 5v6M5 5h6M19 19v-6M19 19h-6"/></svg>RESIZE</span>'
     };
     function subtitleFor(el) {
         switch (el.type) {
@@ -5982,7 +5989,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         var geo = S.R.geo;
         if (bigHandles()) {
             // rev M: on a touch screen the label fills the view, so items are bigger under a finger. Room is left at the sides
-            // and below for the round handles (the band at the top never holds an item).
+            // and below for the MOVE and RESIZE tags (the band at the top never holds an item).
             var pad = handleR() + 6, availH = r.height - RULER - pad - 6;
             S.view.s = Math.max(0.3, Math.min((r.width - RULER - 2 * pad) / geo.w, availH / geo.h));
             S.view.ox = RULER + (r.width - RULER - geo.w * S.view.s) / 2;
@@ -6170,7 +6177,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             }
         });
 
-        // rev M: the centre line while a move snaps to it; the selected item's round handles (finger-sized on a touch screen)
+        // rev M: the centre line while a move snaps to it; rev N: the selected item's MOVE and RESIZE tags
         var G = S.gest && S.gest.kind !== "pending" ? S.gest : null, sit = S.selId ? itemFor(S.selId) : null;
         if (G && G.kind === "move" && G.centred) {
             ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = "rgba(56,189,248,0.95)"; ctx.lineWidth = 1.5;
@@ -6178,25 +6185,57 @@ if (typeof module !== "undefined") { module.exports = H3; }
         }
         S.handles = null;
         if (sit) {
-            var big = bigHandles(), HR = handleR(), HH = handleHitR();
+            // rev N (Ryan 10.16: the move and resize "need to be easier to read and understand what they are"): labelled
+            // tags in big white letters. MOVE sits above the item (inside the top-left corner of a big one), RESIZE under
+            // its bottom-right corner (marked in orange); each moves to the next clear spot rather than cover another
+            // item, and stays on the view. During a move or resize only the one in use shows, and it rides with the item.
+            var big = bigHandles();
             var fx0 = ox + (sit.x + sit.built.inkX) * s - 1, fy0 = oy + (sit.y + sit.built.inkY) * s - 1;
-            var hs = { id: S.selId, size: { x: fx0 + sit.built.ink.w * s + 2, y: fy0 + sit.built.ink.h * s + 2 }, move: big ? { x: fx0, y: fy0 } : null };
-            if (hs.move) {   // a small item: keep the two handles apart so each can be grabbed
-                var ddx = hs.size.x - hs.move.x, ddy = hs.size.y - hs.move.y, dd = Math.sqrt(ddx * ddx + ddy * ddy), need = 2 * HH + 4;
-                if (dd < need) {
-                    if (dd < 1) { ddx = 1; ddy = 1; dd = Math.SQRT2; }
-                    var k = (need - dd) / 2 / dd;
-                    hs.size.x += ddx * k; hs.size.y += ddy * k; hs.move.x -= ddx * k; hs.move.y -= ddy * k;
-                }
+            var fx1 = fx0 + sit.built.ink.w * s + 2, fy1 = fy0 + sit.built.ink.h * s + 2;
+            var tm = tagSize(ctx, "MOVE", big), tr = tagSize(ctx, "RESIZE", big);
+            var keepOn = function (q) {
+                q.l = Math.max(RULER + 2, Math.min(r.width - q.w - 2, q.l));
+                q.t = Math.max(RULER + 2, Math.min(r.height - q.h - 2, q.t));
+                return q;
+            };
+            // the other items on the label, on screen: a tag goes where it covers none of them (first clear spot below)
+            var others = S.R.items.filter(function (o) { return o !== sit; }).map(function (o) {
+                return { l: ox + o.x * s, t: oy + o.y * s, r: ox + (o.x + o.w) * s, b: oy + (o.y + o.h) * s }; });
+            var hits = function (q, list) { return list.some(function (o) { return q.l < o.r + 3 && o.l < q.l + q.w + 3 && q.t < o.b + 3 && o.t < q.t + q.h + 3; }); };
+            var pick = function (z, spots, avoid) {
+                var list = spots.map(function (p) { return keepOn({ l: p[0], t: p[1], w: z.w, h: z.h }); });
+                for (var i = 0; i < list.length; i++) if (!hits(list[i], avoid)) return list[i];
+                list[0].blocked = true;
+                return list[0];
+            };
+            var bigItem = fy1 - fy0 >= 3 * tm.h && fx1 - fx0 >= tm.w + 40, cxm = (fx0 + fx1) / 2;
+            // RESIZE: under the bottom-right corner; else beside it; else inside it (a big item only); else next to MOVE
+            var rSpots = [[fx1 - tr.w + 16, fy1 + 8], [fx1 + 8, fy1 - tr.h]];
+            if (bigItem) rSpots.push([fx1 - tr.w - 8, fy1 - tr.h - 8]);
+            rSpots.push([fx0 - 16, fy1 + 8]);
+            var rs = pick(tr, rSpots, others);
+            var rsBox = rs.blocked ? null : { l: rs.l, t: rs.t, r: rs.l + rs.w, b: rs.t + rs.h };
+            // MOVE: above the item (a big item, a picture: inside its top-left corner, clear of its middle); else beside it
+            var mSpots = [[cxm - tm.w / 2, fy0 - tm.h - 8], [fx0 - tm.w - 8, (fy0 + fy1) / 2 - tm.h / 2], [fx1 + 8, fy0], [fx0, fy1 + 8]];
+            if (bigItem) mSpots.unshift([fx0 + 8, fy0 + 8]);
+            var mv = pick(tm, mSpots, rsBox ? others.concat([rsBox]) : others);
+            if (G && G.tagOff) {   // during a move or resize the tags ride with the item (no jumping to another clear spot)
+                mv.l = fx0 + G.tagOff.mdx; mv.t = fy0 + G.tagOff.mdy; keepOn(mv);
+                rs.l = fx1 + G.tagOff.rdx; rs.t = fy1 + G.tagOff.rdy; keepOn(rs);
+            } else if (rs.blocked || (rs.l < mv.l + mv.w + 4 && mv.l < rs.l + rs.w + 4 && rs.t < mv.t + mv.h + 4 && mv.t < rs.t + rs.h + 4)) {   // no clear spot, or touching: next to MOVE
+                rs.t = mv.t; rs.l = mv.l + mv.w + 6; keepOn(rs);
+                if (rs.l < mv.l + mv.w + 4) { rs.l = mv.l - rs.w - 6; keepOn(rs); }
             }
-            [hs.size, hs.move].forEach(function (q) {   // always on the canvas, where a finger can reach it
-                if (!q) return;
-                q.x = Math.max(RULER + HR + 2, Math.min(r.width - HR - 2, q.x));
-                q.y = Math.max(RULER + HR + 2, Math.min(r.height - HR - 2, q.y));
-            });
-            S.handles = hs;
-            if (hs.move) drawHandle(ctx, hs.move, HR, "move", G && G.kind === "move");
-            drawHandle(ctx, hs.size, HR, "size", G && G.kind !== "move");
+            mv.x = mv.l + mv.w / 2; mv.y = mv.t + mv.h / 2; rs.x = rs.l + rs.w / 2; rs.y = rs.t + rs.h / 2;
+            S.handles = { id: S.selId, move: mv, size: rs, frame: { x0: fx0, y0: fy0, x1: fx1, y1: fy1 } };
+            var showMove = !G || G.kind === "move", showSize = !G || G.kind !== "move";
+            if (showSize) {   // the corner that RESIZE drags
+                var cl = Math.min(14, (fx1 - fx0) / 2, (fy1 - fy0) / 2);
+                ctx.save(); ctx.strokeStyle = "#F26A1B"; ctx.lineWidth = 4; ctx.lineCap = "round";
+                ctx.beginPath(); ctx.moveTo(fx1 - cl, fy1); ctx.lineTo(fx1, fy1); ctx.lineTo(fx1, fy1 - cl); ctx.stroke(); ctx.restore();
+                drawTag(ctx, rs, tr, "RESIZE", "size", G && G.kind !== "move");
+            }
+            if (showMove) drawTag(ctx, mv, tm, "MOVE", "move", G && G.kind === "move");
         }
 
         drawRulers(ctx, r, geo);
@@ -6207,7 +6246,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             S.hintUntil = sit && bigHandles() ? Date.now() + 4500 : 0;
             if (S.hintUntil) setTimeout(draw, 4600);
         }
-        var pill = G ? readoutFor(findEl(S.selId), sit, G) : (sit && !S.gest && Date.now() < S.hintUntil ? "Hold and drag to move it" : "");
+        var pill = G ? readoutFor(findEl(S.selId), sit, G) : (sit && !S.gest && Date.now() < S.hintUntil ? "Tip: or hold the item and drag it" : "");
         S.pill = pill;
         if (pill) drawPill(ctx, r, pill, !!G);
         el$("zval").textContent = Math.round(s / physScale() * 100) + " %";
@@ -6252,17 +6291,16 @@ if (typeof module !== "undefined") { module.exports = H3; }
     //   swipe                          scrolls the page (rev L: a finger never gets stuck moving things while scrolling)
     //   tap                            selects the item under the finger (an empty part: nothing selected)
     //   press and hold, then drag      picks up any item and moves it (the finger held still for 0.3 s)
-    //   drag the move handle           moves the selected item straight away (round handle on its top-left corner)
-    //   drag the size handle           resizes the selected item straight away (round handle on its bottom-right corner)
+    //   drag the MOVE tag              moves the selected item straight away (rev N: a labelled tag above the item)
+    //   drag the RESIZE tag            resizes the selected item straight away (rev N: a labelled tag at its bottom-right corner)
     //   two fingers apart or together  resizes the selected item (or the item between the fingers)
     // A move stops at the edge of the printable area and snaps to the centre line. A resize changes the item's own size
     // setting (text size, picture width, QR module, bar width and height, box width and height) and stops at the biggest
     // size that fits where the item is. While a finger is down, a readout at the top of the label shows the position or
-    // the size. The mouse does the same: drag an item to move it, drag the size handle to resize it. One undo step each.
+    // the size. The mouse does the same: drag an item (or MOVE) to move it, drag RESIZE to resize it. One undo step each.
     var HOLD_MS = 300, SLOP = 10;
     function bigHandles() { return !!S.touchSeen || touchDevice(); }
-    function handleR() { return bigHandles() ? 16 : 6; }        // drawn radius (css px): 32 px across on a touch screen
-    function handleHitR() { return bigHandles() ? 26 : 10; }    // what a finger can grab: 52 px across
+    function handleR() { return bigHandles() ? 16 : 12; }       // room kept round the label for the tags (css px)
     function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* no vibration */ } }
     function toDots(e) {
         return { x: (e.offsetX - S.view.ox) / S.view.s, y: (e.offsetY - S.view.oy) / S.view.s };
@@ -6274,14 +6312,16 @@ if (typeof module !== "undefined") { module.exports = H3; }
         }
         return null;
     }
-    /** The handle of the selected item at canvas point (ox, oy): "size", "move" or null (the nearer one wins). */
+    /** The tag of the selected item at canvas point (ox, oy): "size", "move" or null (the nearer one wins). A finger can grab
+     *  a little outside the tag (8 px on a touch screen), so a tag 32 px tall is a 48 px target. */
     function handleAt(ox, oy) {
         var H = S.handles; if (!H || !S.selId || H.id !== S.selId) return null;
-        var R2 = handleHitR() * handleHitR(), best = null, bd = Infinity;
+        var m = bigHandles() ? 8 : 3, best = null, bd = Infinity;
         ["size", "move"].forEach(function (k) {
             var q = H[k]; if (!q) return;
+            if (ox < q.l - m || ox > q.l + q.w + m || oy < q.t - m || oy > q.t + q.h + m) return;
             var d = (q.x - ox) * (q.x - ox) + (q.y - oy) * (q.y - oy);
-            if (d <= R2 && d < bd) { bd = d; best = k; }
+            if (d < bd) { bd = d; best = k; }
         });
         return best;
     }
@@ -6334,10 +6374,10 @@ if (typeof module !== "undefined") { module.exports = H3; }
             return;
         }
         var t = e.changedTouches[0], p = touchPt(t);
-        G = { kind: "pending", start: p, last: p, id: t.identifier };
+        G = { kind: "pending", start: p, last: p, id: t.identifier, t0: Date.now() };
         S.gest = G;
         var hd = handleAt(p.ox, p.oy);
-        if (hd) { if (e.cancelable) e.preventDefault(); beginGesture(hd, G); return; }   // a handle works straight away
+        if (hd) { if (e.cancelable) e.preventDefault(); G.onTag = true; beginGesture(hd, G); return; }   // a tag works straight away
         var it = hit(toDots({ offsetX: p.ox, offsetY: p.oy }));
         if (it) G.timer = setTimeout(function () { pickUp(G, it.el.id); }, HOLD_MS);
     }
@@ -6359,6 +6399,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             return;
         }
         if (e.cancelable) e.preventDefault();               // moving or resizing: the page stays still
+        G.last = p;
         gestureTo(p);
     }
     function onTouchEnd(e) {
@@ -6375,7 +6416,12 @@ if (typeof module !== "undefined") { module.exports = H3; }
             return;
         }
         if (e.cancelable) e.preventDefault();
+        var tapped = G.onTag && !G.changed && Date.now() - G.t0 < 500 && Math.abs(G.last.cx - G.start.cx) + Math.abs(G.last.cy - G.start.cy) <= SLOP;
         endGesture();
+        if (tapped) {   // rev N: a quick tap on a tag that lies over another item selects that item
+            var under = hit(toDots({ offsetX: G.start.ox, offsetY: G.start.oy }));
+            if (under && under.el.id !== S.selId) select(under.el.id);
+        }
     }
     function startPinch(e) {
         var a = touchPt(e.touches[0]), b = touchPt(e.touches[1]);
@@ -6403,6 +6449,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
         G.el0 = JSON.parse(JSON.stringify(el, function (k, v) { return k === "src" ? undefined : v; }));   // a picture's grey levels aren't needed
         G.it0 = { x: it.x, y: it.y, w: it.w, h: it.h, info: it.built.info };
         if (el.type === "picture") G.asp = pictureAspect(el);
+        var H = S.handles;
+        if (H && H.id === el.id && H.frame) G.tagOff = { mdx: H.move.l - H.frame.x0, mdy: H.move.t - H.frame.y0, rdx: H.size.l - H.frame.x1, rdy: H.size.t - H.frame.y1 };
         S.gest = G; S.drag = true;
         draw();
     }
@@ -6575,34 +6623,43 @@ if (typeof module !== "undefined") { module.exports = H3; }
         }
         return t + (G.limited ? " · as big as fits here" : (G.end ? " · " + G.end : ""));
     }
-    /** A round handle: orange with a white ring, and a white move (four arrows) or size (diagonal arrow) sign. */
-    function drawHandle(ctx, q, r, kind, active) {
+    /** Size of a tag: 32 px tall with 14 px letters on a touch screen, 24 px with 12 px letters for a mouse. */
+    function tagSize(ctx, label, big) {
+        var fs = big ? 14 : 12, hh = big ? 32 : 24, ic = big ? 16 : 13;
+        ctx.save(); ctx.font = "800 " + fs + "px Inter, Arial, sans-serif"; var tw = ctx.measureText(label).width; ctx.restore();
+        return { w: Math.round(10 + ic + 7 + tw + 13), h: hh, fs: fs, ic: ic };
+    }
+    /** A tag: orange with a white ring, a white sign (four arrows to move, a diagonal arrow to resize) and its name. */
+    function drawTag(ctx, q, z, label, kind, active) {
+        var rad = q.h / 2, l = q.l, t = q.t, w = q.w, hh = q.h;
         ctx.save();
-        ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
-        ctx.beginPath(); ctx.arc(q.x, q.y, active ? r + 2 : r, 0, Math.PI * 2);
+        ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2;
+        ctx.beginPath();
+        ctx.moveTo(l + rad, t); ctx.lineTo(l + w - rad, t); ctx.arcTo(l + w, t, l + w, t + rad, rad); ctx.arcTo(l + w, t + hh, l + w - rad, t + hh, rad);
+        ctx.lineTo(l + rad, t + hh); ctx.arcTo(l, t + hh, l, t + rad, rad); ctx.arcTo(l, t, l + rad, t, rad); ctx.closePath();
         ctx.fillStyle = active ? "#FF8A3D" : "#F26A1B"; ctx.fill();
         ctx.shadowColor = "transparent";
         ctx.lineWidth = 2; ctx.strokeStyle = "#FFFFFF"; ctx.stroke();
-        if (r >= 10) {
-            var k = r * 0.62, a = r * 0.2;
-            ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath();
-            var dirs = kind === "move" ? [[1, 0], [-1, 0], [0, 1], [0, -1]] : [[0.72, 0.72], [-0.72, -0.72]];
-            dirs.forEach(function (d) {
-                var tx = q.x + d[0] * k, ty = q.y + d[1] * k;
-                ctx.moveTo(q.x, q.y); ctx.lineTo(tx, ty);
-                ctx.moveTo(tx - d[0] * a - d[1] * a, ty - d[1] * a + d[0] * a); ctx.lineTo(tx, ty); ctx.lineTo(tx - d[0] * a + d[1] * a, ty - d[1] * a - d[0] * a);
-            });
-            ctx.stroke();
-        }
+        var cx = l + 10 + z.ic / 2, cy = t + hh / 2, k = z.ic / 2, a = z.ic * 0.24;
+        ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath();
+        var dirs = kind === "move" ? [[1, 0], [-1, 0], [0, 1], [0, -1]] : [[0.72, 0.72], [-0.72, -0.72]];
+        dirs.forEach(function (d) {
+            var tx = cx + d[0] * k, ty = cy + d[1] * k;
+            ctx.moveTo(cx, cy); ctx.lineTo(tx, ty);
+            ctx.moveTo(tx - d[0] * a - d[1] * a, ty - d[1] * a + d[0] * a); ctx.lineTo(tx, ty); ctx.lineTo(tx - d[0] * a + d[1] * a, ty - d[1] * a - d[0] * a);
+        });
+        ctx.stroke();
+        ctx.fillStyle = "#FFFFFF"; ctx.font = "800 " + z.fs + "px Inter, Arial, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+        ctx.fillText(label, l + 10 + z.ic + 7, cy + 0.5);
         ctx.restore();
     }
     /** The readout (or, on a touch screen, a short hint) at the top of the label. */
     function drawPill(ctx, r, txt, active) {
         ctx.save();
-        ctx.font = "700 13px Inter, Arial, sans-serif";
+        ctx.font = "700 " + (bigHandles() ? 14 : 13) + "px Inter, Arial, sans-serif";
         var maxW = r.width - RULER - 8, tw = ctx.measureText(txt).width;
         while (tw + 22 > maxW && txt.length > 8) { txt = txt.slice(0, -2) + "…"; tw = ctx.measureText(txt).width; }
-        var w = tw + 22, hh = 24, x = RULER + (r.width - RULER - w) / 2, y = 0, rad = 12;
+        var w = tw + 22, hh = 26, x = RULER + (r.width - RULER - w) / 2, y = 0, rad = 13;
         ctx.beginPath();
         ctx.moveTo(x + rad, y); ctx.lineTo(x + w - rad, y); ctx.arcTo(x + w, y, x + w, y + rad, rad); ctx.arcTo(x + w, y + hh, x + w - rad, y + hh, rad);
         ctx.lineTo(x + rad, y + hh); ctx.arcTo(x, y + hh, x, y + hh - rad, rad); ctx.arcTo(x, y, x + rad, y, rad); ctx.closePath();

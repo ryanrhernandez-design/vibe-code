@@ -1,4 +1,4 @@
-# H3 Label Editor Simulator (rev M, 10.16.26)
+# H3 Label Editor Simulator (rev N, 10.16.26)
 
 A working browser simulator of the H3 fruit-label editor. It shows the label layout and generates real barcodes and QR codes:
 
@@ -11,6 +11,8 @@ A working browser simulator of the H3 fruit-label editor. It shows the label lay
 The page also has the engineering controls, a 1-bit 300 dpi print preview, a test print and send-to-lanes.
 
 **Open it:** https://ryanrhernandez-design.github.io/vibe-code/h3-label-editor/
+
+**New in rev N:** the move and resize handles say what they are. The selected item has two orange tags in big white letters, **MOVE** and **RESIZE**, placed where they don't cover other items. While you drag, only the one in use shows.
 
 **New in rev M:** move and resize with a finger. Tap an item and it gets two round orange handles: drag the four-arrow one to move it, drag the diagonal-arrow one to make it bigger or smaller. Or press and hold any item for a moment, then drag it, or pinch with two fingers to resize. A quick swipe over the label still scrolls the page. Moves snap to the centre line and stop at the printable edge; a readout at the top shows the position or size. The label is bigger on a phone, and the mouse can resize too.
 
