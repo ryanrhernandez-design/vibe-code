@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>H3 Label Editor Simulator</title>
-<meta name="description" content="Working simulator of the H3 Label Editor: GS1 DataBar, UPC/EAN, Code 128, GS1-128 and QR generated in H3, the 24 Hurst die shapes, a shared label repository with revision history (GitHub or claude.ai), engineering controls, 1-bit 300 dpi print preview, test print and send to lanes.">
+<meta name="description" content="Working simulator of the H3 Label Editor: GS1 DataBar, UPC/EAN, Code 128, GS1-128 and QR generated in H3, pictures from the phone camera printed as direct-thermal dots, the 24 Hurst die shapes, a shared label repository with revision history (GitHub or claude.ai), engineering controls, 1-bit 300 dpi print preview, test print and send to lanes.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Roboto+Condensed:wght@400;700&display=swap">
@@ -309,6 +309,25 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
 .btn.big { min-height: 46px; padding: 10px 20px; font-size: 15px; }
 #inv-link { width: 100%; box-sizing: border-box; font-size: 11.5px; height: 64px; min-height: 0; resize: none; }
 
+/* rev J: Picture (phone camera -> direct-thermal dots) */
+.piccard { align-items: flex-start; min-height: 112px; }
+.piccard .pico svg { width: 30px; height: 30px; color: var(--accent); }
+.cropdlg .db { align-items: center; }
+.cropwrap { display: flex; justify-content: center; width: 100%; }
+.cropwrap { padding: 14px; box-sizing: border-box; }
+.cropbox { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; background: #000; }
+.cropbox canvas { display: block; }
+.cropclip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.cropshade { position: absolute; box-shadow: 0 0 0 9999px rgba(3, 6, 14, .62); }
+.cropsel { position: absolute; outline: 2px solid var(--accent); cursor: move; }
+.cropsel .ch { position: absolute; width: 26px; height: 26px; background: var(--accent); border: 2px solid #fff; border-radius: 50%; box-sizing: border-box; }
+.cropsel .ch.tl { left: -13px; top: -13px; cursor: nwse-resize; } .cropsel .ch.tr { right: -13px; top: -13px; cursor: nesw-resize; }
+.cropsel .ch.bl { left: -13px; bottom: -13px; cursor: nesw-resize; } .cropsel .ch.br { right: -13px; bottom: -13px; cursor: nwse-resize; }
+.cropdlg .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.picrow { display: flex; gap: 10px; align-items: center; }
+.picthumb { border-radius: 6px; background: #fff; flex: none; }
+.row.wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+
 </style>
 </head>
 <body>
@@ -355,6 +374,7 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
       <button class="addbtn" type="button" data-add="barcode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5v14M7 5v14M11 5v14M13 5v14M17 5v14M20 5v14"/></svg>Barcode</button>
       <button class="addbtn" type="button" data-add="qr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h7v-4"/></svg>QR code</button>
       <button class="addbtn" type="button" data-add="shape"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="7" ry="9"/></svg>Shape</button>
+      <button class="addbtn" type="button" data-add="picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>Picture</button>
       <button class="addbtn" type="button" data-add="plu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 4 7 20M17 4l-2 16M4 9h16M3 15h16"/></svg>PLU</button>
     </nav>
 
@@ -399,7 +419,7 @@ textarea.inp.qrtext { min-height: 74px; font-family: inherit; font-size: 13px; }
     <button class="btn" id="btnLang" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>English</button>
     <button class="btn" id="btnExit" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>Exit</button>
   </nav>
-  <div class="foot"><span>Label Editor simulator rev I &middot; DRAFT 2026-10-15 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
+  <div class="foot"><span>Label Editor simulator rev J &middot; DRAFT 2026-10-16 &middot; Hurst International</span><span>DataBar ISO/IEC 24724 &middot; EAN/UPC ISO/IEC 15420 &middot; Code 128 ISO/IEC 15417 &middot; QR ISO/IEC 18004 &middot; print dots (DataBar bars in half dots)</span></div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -2178,7 +2198,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Core - label model, engineering controls, placement rules, 1-bit renderer and checks.
- * DRAFT - Hurst International, H3 Label Editor simulator rev H, 2026-10-07 (revs E-G 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
+ * DRAFT - Hurst International, H3 Label Editor simulator rev J, 2026-10-16 (rev H 2026-10-07; revs E-G 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
  *
  * Everything here is UI-independent and deterministic, so it can be ported class-for-class to C#:
  *
@@ -2191,7 +2211,8 @@ if (typeof module !== "undefined") { module.exports = H3; }
  *   Placement.fits/clampMove/findSpot PlacementRules
  *   renderLabel()                     LabelRenderer
  *   validate()                        LabelValidator (operator problems + engineering checks)
- *   parseDocument()/serialize()       LabelDocument JSON (format "h3-label", version 2; version 1 files still open)
+ *   parseDocument()/serialize()       LabelDocument JSON (format "h3-label", version 2; 3 when it has a picture; 1 still opens)
+ *   pictureCells() (rev J)            PictureDots (grey source -> 1-bit picture dots; integer maths, bit-exact)
  *
  * Units: every position and size is an INTEGER number of printhead dots (300 dpi: 1 dot = 0.0847 mm).
  * One exception (rev H): a DataBar's bar width (xDots) may be a half dot (2.5, 3.5 ...); its modules then alternate
@@ -2259,6 +2280,11 @@ H3.Core = (function () {
                 thresholdPct: 50
             },
             shape: { minStrokeDots: 2, defaultStrokeDots: 3 },
+            // rev J (Ryan 10.16.26: a picture taken on the phone, printed direct thermal): a photo or drawing as 1-bit dots
+            picture: {
+                cellDots: 2,          // each picture dot is a cellDots x cellDots block: never below the 2-dot printhead floor (minLineDots)
+                maxBlackPct: 60       // engineering check: more black than this needs a test print (heat on the printhead); set from test prints
+            },
             testPrint: { defaultLane: 1 },
             laneCount: 10
         };
@@ -2743,6 +2769,7 @@ H3.Core = (function () {
             case "barcode": return "Barcode";
             case "qr": return "QR code";
             case "shape": return "Shape";
+            case "picture": return "Picture";
         }
         return el.type;
     }
@@ -2756,6 +2783,7 @@ H3.Core = (function () {
             case "qr": return el.content === "gs1dl" ? "GS1 Digital Link" + (dataSource(el) === "job" ? " · job GTIN" : "") + (el.includeLot ? " + lot" : "")
                                                      : (el.content === "link" ? (el.link || "Web link") : (el.text || "Text"));
             case "shape": return { hline: "Horizontal line", vline: "Vertical line", rect: "Rectangle", ellipse: "Ellipse" }[el.kind] || "Shape";
+            case "picture": return (el.look === "drawing" ? "Drawing or logo" : "Photo") + (pictureSource(el.src) ? (el.invert ? " · reversed" : "") : " · no picture yet");
         }
         return "";
     }
@@ -2931,10 +2959,137 @@ H3.Core = (function () {
                 }
             }
             info = { strokeDots: st };
+        } else if (el.type === "picture") {
+            // rev J: the picture is a grid of cells (cellDots x cellDots each); every cell is black or white
+            var pc = pictureCellDots(eng);
+            var cw = Math.max(1, Math.floor(clampInt(el.w, pc, 4000) / pc)), ch = Math.max(1, Math.floor(clampInt(el.h, pc, 4000) / pc));
+            w = cw * pc; h = ch * pc;
+            ink = new Bitmap1(w, h);
+            var ps = pictureSource(el.src), black = 0;
+            if (!ps) {
+                errors.push({ code: "picture-empty", text: el.src ? "The picture in this label file can’t be read. Take or choose it again." : "Picture is empty. Take a photo or choose a picture.",
+                              fix: { kind: "focus", field: "pic" } });
+            } else {
+                var cells = pictureCells(ps.g, ps.w, ps.h, cw, ch, el);
+                for (var cy = 0; cy < ch; cy++) for (var cx = 0; cx < cw; cx++) {
+                    if (!cells[cy * cw + cx]) continue;
+                    black++;
+                    ink.fillRect(cx * pc, cy * pc, pc, pc);
+                }
+            }
+            info = { look: el.look === "drawing" ? "drawing" : "photo", cellDots: pc, cellsW: cw, cellsH: ch, srcW: ps ? ps.w : 0, srcH: ps ? ps.h : 0,
+                     blackCells: black, blackPct: Math.round(black * 1000 / (cw * ch)) / 10 };
         } else {
             ink = new Bitmap1(1, 1); w = 1; h = 1;
         }
         return { w: w, h: h, ink: ink, inkX: inkX, inkY: inkY, errors: errors, info: info };
+    }
+
+    // =====================================================================================================
+    // Pictures (rev J): a photo or drawing printed direct thermal, as 1-bit dots
+    // =====================================================================================================
+    // el.src = { w, h, g8 }: the picture (already cropped and turned) as grey levels, w x h, row by row, one byte per
+    //          pixel (0 = black ... 255 = white), base64. The editor stores it at about the printed size, so a label
+    //          file stays small and every H3 prints the same dots from it.
+    // el.w, el.h = printed size in dots; it snaps down to whole cells (engineering picture.cellDots, 2 = the printhead floor).
+    // el.look  = "photo"   : error diffusion (Floyd-Steinberg, serpentine) spreads black cells to show the greys
+    //            "drawing" : sharp, each cell black when its grey is below the midpoint (logos, line art, text)
+    // el.bright, el.contrast = -100 ... 100 (0 = as taken); el.invert = swap black and white (applied first).
+    // Integer maths only, so the C# port (PictureDots) gives the identical dots.
+    var B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    var B64I = (function () { var t = {}; for (var i = 0; i < 64; i++) t[B64.charAt(i)] = i; return t; })();
+    /** Base64 -> bytes (standard alphabet, padding optional, whitespace ignored). null if malformed. */
+    function b64ToBytes(s) {
+        s = String(s || "").replace(/[\s=]+/g, "");
+        if (s.length % 4 === 1) return null;
+        var out = new Uint8Array(Math.floor(s.length * 3 / 4)), o = 0, acc = 0, bits = 0;
+        for (var i = 0; i < s.length; i++) {
+            var v = B64I[s.charAt(i)];
+            if (v === undefined) return null;
+            acc = (acc << 6) | v; bits += 6;
+            if (bits >= 8) { bits -= 8; out[o++] = (acc >> bits) & 255; }
+        }
+        return out;
+    }
+    /** Bytes -> base64 (standard alphabet, padded). */
+    function bytesToB64(b) {
+        var s = "", i;
+        for (i = 0; i + 2 < b.length; i += 3) {
+            var n = (b[i] << 16) | (b[i + 1] << 8) | b[i + 2];
+            s += B64.charAt(n >> 18) + B64.charAt((n >> 12) & 63) + B64.charAt((n >> 6) & 63) + B64.charAt(n & 63);
+        }
+        if (i < b.length) {
+            var m = b[i] << 16 | ((i + 1 < b.length) ? b[i + 1] << 8 : 0);
+            s += B64.charAt(m >> 18) + B64.charAt((m >> 12) & 63) + ((i + 1 < b.length) ? B64.charAt((m >> 6) & 63) : "=") + "=";
+        }
+        return s;
+    }
+    var picCache = [];   // the last few decoded sources (base64 decoding on every redraw would be wasted work)
+    /** The picture's grey levels { w, h, g } or null when missing or unreadable. */
+    function pictureSource(src) {
+        if (!src || typeof src !== "object") return null;
+        var w = src.w | 0, h = src.h | 0;
+        if (w < 1 || h < 1 || w > 4000 || h > 4000 || w * h > 4000000 || typeof src.g8 !== "string") return null;
+        for (var i = 0; i < picCache.length; i++) if (picCache[i].s === src.g8 && picCache[i].w === w && picCache[i].h === h) return picCache[i].v;
+        var g = b64ToBytes(src.g8);
+        var v = (g && g.length === w * h) ? { w: w, h: h, g: g } : null;
+        picCache.unshift({ s: src.g8, w: w, h: h, v: v });
+        if (picCache.length > 8) picCache.pop();
+        return v;
+    }
+    function pictureCellDots(eng) {
+        var p = (eng.picture && eng.picture.cellDots) | 0;
+        return Math.max(eng.minLineDots | 0, p, 1);
+    }
+    /** Integer division truncating toward zero (C#'s a / b). */
+    function idiv(a, b) { return (a - a % b) / b; }
+    /** Grey picture -> cells (1 = black), cw x ch. Steps: box-average resample, invert, contrast, brightness, then dither or threshold. */
+    function pictureCells(g, sw, sh, cw, ch, el) {
+        var n = cw * ch, v = new Int32Array(n), x, y;
+        // 1. box-average resample: target cell (x, y) averages source columns floor(x*sw/cw) .. floor((x+1)*sw/cw)-1 (at least one), rows the same
+        for (y = 0; y < ch; y++) {
+            var y0 = Math.floor(y * sh / ch), y1 = Math.floor((y + 1) * sh / ch); if (y1 <= y0) y1 = y0 + 1;
+            for (x = 0; x < cw; x++) {
+                var x0 = Math.floor(x * sw / cw), x1 = Math.floor((x + 1) * sw / cw); if (x1 <= x0) x1 = x0 + 1;
+                var sum = 0, cnt = (x1 - x0) * (y1 - y0);
+                for (var yy = y0; yy < y1; yy++) { var r = yy * sw; for (var xx = x0; xx < x1; xx++) sum += g[r + xx]; }
+                v[y * cw + x] = Math.floor((sum + (cnt >> 1)) / cnt);
+            }
+        }
+        // 2. tone: invert, contrast around mid grey 128, brightness (+100 = +128 levels), clamp 0..255
+        var c = clampInt(el.contrast || 0, -100, 100), b = clampInt(el.bright || 0, -100, 100), inv = !!el.invert;
+        var lut = new Int32Array(256);
+        for (var i = 0; i < 256; i++) {
+            var t = inv ? 255 - i : i;
+            t = 128 + idiv((t - 128) * (100 + c), 100) + idiv(b * 128, 100);
+            lut[i] = t < 0 ? 0 : (t > 255 ? 255 : t);
+        }
+        for (i = 0; i < n; i++) v[i] = lut[v[i]];
+        var out = new Uint8Array(n);
+        if (el.look === "drawing") {
+            for (i = 0; i < n; i++) out[i] = v[i] < 128 ? 1 : 0;
+            return out;
+        }
+        // 3. photo: Floyd-Steinberg error diffusion, serpentine (even rows left to right, odd rows right to left).
+        //    Errors are kept in 1/16 levels: 7/16 ahead, 3/16 behind below, 5/16 below, 1/16 ahead below; read back with >> 4.
+        var cur = new Int32Array(cw + 2), nxt = new Int32Array(cw + 2);
+        for (y = 0; y < ch; y++) {
+            var ltr = (y % 2) === 0, d = ltr ? 1 : -1;
+            for (var k = 0; k < cw; k++) {
+                x = ltr ? k : cw - 1 - k;
+                var old = v[y * cw + x] + (cur[x + 1] >> 4);
+                var blk = old < 128;
+                out[y * cw + x] = blk ? 1 : 0;
+                var err = old - (blk ? 0 : 255);
+                cur[x + 1 + d] += err * 7;
+                nxt[x + 1 - d] += err * 3;
+                nxt[x + 1] += err * 5;
+                nxt[x + 1 + d] += err;
+            }
+            var tmp = cur; cur = nxt; nxt = tmp;
+            for (k = 0; k < cw + 2; k++) nxt[k] = 0;
+        }
+        return out;
     }
 
     function clampInt(v, lo, hi) {
@@ -3133,6 +3288,14 @@ H3.Core = (function () {
                 check(nm, "Rotation locked at 0°", true, "");
             } else if (el.type === "shape") {
                 check(nm, "Line width >= " + eng.minLineDots + " dots", inf.strokeDots >= eng.minLineDots, inf.strokeDots + " dots");
+            } else if (el.type === "picture") {
+                check(nm, "Picture dots in " + inf.cellDots + " x " + inf.cellDots + " blocks (printhead floor " + eng.minLineDots + " dots)", inf.cellDots >= eng.minLineDots,
+                      inf.cellsW + " x " + inf.cellsH + " blocks = " + t.w + " x " + t.h + " dots, " + (inf.look === "drawing" ? "drawing (sharp)" : "photo (spread dots)") +
+                      (inf.srcW ? ", from a " + inf.srcW + " x " + inf.srcH + " grey picture" : ""));
+                var maxBlack = (eng.picture && eng.picture.maxBlackPct) || 60;
+                check(nm, "Black <= " + maxBlack + " % of the picture", inf.blackPct <= maxBlack,
+                      inf.blackPct + " % black" + (inf.blackPct <= maxBlack ? "" : " - heavy black heats the printhead: test-print before use"));
+                check(nm, "Picture data readable", inf.srcW > 0, inf.srcW ? "grey levels, base64" : "missing or unreadable");
             } else {
                 check(nm, "Text size >= " + eng.text.minPt + " pt", el.sizePt >= eng.text.minPt, el.sizePt + " pt = " + inf.sizeDots + " dots");
                 check(nm, "Approved font", fontFamily(eng, el.font) === inf.family, inf.family);
@@ -3187,6 +3350,8 @@ H3.Core = (function () {
             case "qr": return extend(base, { content: opts.content || "gs1dl", source: opts.source || "typed", gtin: opts.gtin || "", includeLot: true,
                                              link: opts.link || "https://", text: opts.text || "", moduleDots: qrModuleDots({}, eng) });
             case "shape": return extend(base, { kind: opts.kind || "hline", w: 150, h: 60, strokeDots: eng.shape.defaultStrokeDots, fill: false });
+            case "picture": return extend(base, { w: opts.w || 120, h: opts.h || 90, look: opts.look === "drawing" ? "drawing" : "photo",
+                                                  bright: 0, contrast: 0, invert: false, src: opts.src || null });
         }
         throw new Error("Unknown element type " + type);
     }
@@ -3199,7 +3364,7 @@ H3.Core = (function () {
     function parseDocument(json, eng) {
         var d = (typeof json === "string") ? JSON.parse(json) : json;
         if (!d || d.format !== "h3-label") throw new Error("Not an H3 label file (format must be \"h3-label\").");
-        if (d.version > 2) throw new Error("This label file is from a newer H3 (format version " + d.version + ").");
+        if (d.version > 3) throw new Error("This label file is from a newer H3 (format version " + d.version + ").");
         var doc = newDocument((d.stock && typeof d.stock === "object") ? d.stock : d.stockId, d.name, d.customer);
         doc.job = extend(defaultJob(), d.job || {});
         doc.modified = d.modified || "";
@@ -3237,12 +3402,32 @@ H3.Core = (function () {
             el.moduleDots = qrModuleDots(el, eng);
         }
         if (el.type === "shape") el.strokeDots = Math.max(eng.shape.minStrokeDots, el.strokeDots | 0);
+        if (el.type === "picture") {
+            el.look = el.look === "drawing" ? "drawing" : "photo";
+            el.bright = clampInt(numOr0(el.bright), -100, 100); el.contrast = clampInt(numOr0(el.contrast), -100, 100); el.invert = el.invert === true;
+            var pc = pictureCellDots(eng);
+            el.w = Math.max(pc, el.w | 0); el.h = Math.max(pc, el.h | 0);
+            if (!el.src || typeof el.src !== "object") el.src = null;
+            else el.src = { w: el.src.w | 0, h: el.src.h | 0, g8: typeof el.src.g8 === "string" ? el.src.g8 : "" };
+            el.rot = 0;   // turn the picture when cropping instead
+        }
         if (el.rot !== undefined && [0, 90, 180, 270].indexOf(el.rot) < 0) el.rot = 0;
         if (el.type === "barcode" || el.type === "qr" || el.type === "plu") el.rot = 0; // ruled: no rotation for symbols
     }
 
+    /** Rev J: a label with a picture is written as format version 3, so an H3 without pictures says it is from a newer H3
+     *  instead of failing on the unknown item. Labels without pictures stay version 2. */
+    function hasPicture(doc) { return (doc.elements || []).some(function (e) { return e.type === "picture"; }); }
+    /** A number from a label file: numbers and numeric strings count, anything else is 0 (same as the C# reader). */
+    function numOr0(v) {
+        if (typeof v === "number") return isFinite(v) ? v : 0;
+        if (typeof v === "string" && v.trim() !== "" && isFinite(+v)) return +v;
+        return 0;
+    }
     function serialize(doc) {
-        return JSON.stringify(doc, null, 2);
+        var out = extend({}, doc);
+        out.version = hasPicture(doc) ? 3 : Math.min(2, doc.version || 2);
+        return JSON.stringify(out, null, 2);
     }
 
     return {
@@ -3255,7 +3440,8 @@ H3.Core = (function () {
         buildElement: buildElement, elementName: elementName, elementSummary: elementSummary,
         Placement: Placement, overlaps: overlaps, renderLabel: renderLabel, validate: validate,
         newDocument: newDocument, newElement: newElement, parseDocument: parseDocument, sanitiseElement: sanitiseElement,
-        serialize: serialize, defaultJob: defaultJob, ptToDots: ptToDots, dotsToMm: dotsToMm, fontFamily: fontFamily, clampInt: clampInt
+        serialize: serialize, defaultJob: defaultJob, ptToDots: ptToDots, dotsToMm: dotsToMm, fontFamily: fontFamily, clampInt: clampInt,
+        pictureSource: pictureSource, pictureCells: pictureCells, pictureCellDots: pictureCellDots, b64ToBytes: b64ToBytes, bytesToB64: bytesToB64, hasPicture: hasPicture
     };
 })();
 
@@ -3263,7 +3449,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
 
 /*
  * H3 Label Editor simulator - user interface (browser only).
- * DRAFT - Hurst International, rev I, 2026-10-15 (rev H 2026-10-07; revs G, F, E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
+ * DRAFT - Hurst International, rev J, 2026-10-16 (rev I 2026-10-15; rev H 2026-10-07; revs G, F, E 2026-10-05; D, C, B 2026-10-02; A 2026-09-29).
  *
  * The UI only calls H3.Core / H3.Gs1 / H3.DataBar / H3.Qr (the portable core). In H3 this layer is rebuilt
  * in the C# UI toolkit; the behaviour (flows, prompts, fixes, lane simulation) is described in the port guide.
@@ -3328,6 +3514,10 @@ if (typeof module !== "undefined") { module.exports = H3; }
         qr: '<svg viewBox="0 0 24 24" ' + P + '><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h7v-4"/></svg>',
         shape: '<svg viewBox="0 0 24 24" ' + P + '><ellipse cx="12" cy="12" rx="7" ry="9"/></svg>',
         plu: '<svg viewBox="0 0 24 24" ' + P + '><path d="M9 4 7 20M17 4l-2 16M4 9h16M3 15h16"/></svg>',
+        picture: '<svg viewBox="0 0 24 24" ' + P + '><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>',
+        camera: '<svg viewBox="0 0 24 24" ' + P + '><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+        turn: '<svg viewBox="0 0 24 24" ' + P + '><path d="M20 11a8 8 0 1 1-3-6.2"/><path d="M20 4v5h-5"/></svg>',
+        crop: '<svg viewBox="0 0 24 24" ' + P + '><path d="M6 2v16h16"/><path d="M2 6h16v16"/></svg>',
         undo: '<svg viewBox="0 0 24 24" ' + P + '><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
         redo: '<svg viewBox="0 0 24 24" ' + P + '><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>',
         save: '<svg viewBox="0 0 24 24" ' + P + '><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h8M8 21v-7h8v7"/></svg>',
@@ -3427,6 +3617,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
     function snapshot() { return JSON.stringify(S.doc); }
     function loadDoc(doc, keepHistory) {
         S.doc = doc;
+        if (!keepHistory) S.pic = {};   // rev J: full photos kept for the open label only
         if (!keepHistory) { S.history = [snapshot()]; S.future = []; }
         S.selId = null;
         S.view.fit = true;
@@ -4624,6 +4815,12 @@ if (typeof module !== "undefined") { module.exports = H3; }
             if (!Core.Placement.fitsAnywhere(geo, b0.w, b0.h)) { toast(Core.symInfo(el.symbology).label + " doesn’t fit this label even at the thinnest bars. Pick another barcode type or label shape.", true); commit(); return; }
         }
         else if (el.type === "shape") { el.w = Math.max(10, Math.round(el.w * 0.7)); el.h = Math.max(10, Math.round(el.h * 0.7)); }
+        else if (el.type === "picture") {
+            var fitP = pictureBiggest(el, false, el.w);
+            if (fitP) { setPictureSize(el, fitP.w); el.x = fitP.x; el.y = fitP.y; }
+            else toast("The picture doesn’t fit this label. Pick a bigger label shape.", true);
+            commit(); return;
+        }
         else {
             while (el.sizePt > S.eng.text.minPt) {
                 var b = measure(S.doc, el);
@@ -4779,6 +4976,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
         else if (el.type === "barcode") propsBarcode(box, el, it);
         else if (el.type === "qr") propsQr(box, el, it);
         else if (el.type === "shape") propsShape(box, el);
+        else if (el.type === "picture") propsPicture(box, el, it);
 
         // position (nudge) - same pad for every element; fixed step set by engineering
         var pos = h("div", { class: "nudge" }, [
@@ -4817,6 +5015,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
             case "field": return "Fills in from the job when printing";
             case "plu": return "Price look-up number";
             case "shape": return "Line or outline";
+            case "picture": return "Printed as dots, like the preview";
         }
         return "Fixed text";
     }
@@ -5182,6 +5381,321 @@ if (typeof module !== "undefined") { module.exports = H3; }
         });
     }
     function focusSoon(id) { setTimeout(function () { var f = el$(id); if (f) { f.focus(); try { var n = f.value.length; f.setSelectionRange(n, n); } catch (e) { } } }, 30); }
+
+    // =================================================================================================
+    // Rev J: Picture - a photo taken on the phone (or a picture file), printed direct thermal as dots
+    // =================================================================================================
+    // Flow: Add > Picture > Take a photo (the phone's camera) or Choose a picture > crop and turn > it is placed on the
+    // label at the biggest size that fits the free space. The label file keeps the cropped picture as grey levels
+    // (Core picture src) at about its printed size; the core turns it into dots. The full photo stays in this browser
+    // (S.pic) while the label is open, so cropping again or making it bigger uses the original.
+    S.pic = {};
+    var PIC_WORK_MAX = 1600;   // the photo is scaled to this many pixels on its long side as soon as it is opened
+    var PIC_SRC_MIN = 240;     // the grey picture stored in the label is at least this many pixels on its long side
+    var PIC_SRC_MAX = 60000;   // ... and at most this many pixels (80 KB in the label file): still more than 1 pixel per printed
+                               // picture dot on the biggest label, and a label stays far below the repository's 256 KB per label
+    function touchDevice() {
+        try { return window.matchMedia("(pointer: coarse)").matches || ("ontouchstart" in window) || navigator.maxTouchPoints > 0; } catch (e) { return false; }
+    }
+    /** Open the phone's camera (camera = true) or its photo picker / a file picker. */
+    function pickImageFile(camera, then) {
+        var inp = h("input", { type: "file", accept: "image/*", id: camera ? "pic-camera-input" : "pic-file-input", style: "position:fixed;left:-9999px;top:0" });
+        if (camera) inp.setAttribute("capture", "environment");
+        inp.addEventListener("change", function () {
+            var f = inp.files && inp.files[0];
+            inp.remove();
+            if (f) loadPictureFile(f, then);
+        });
+        document.body.appendChild(inp);
+        inp.click();
+    }
+    /** Read a photo file into a canvas, already turned the right way up (the browser applies the phone's orientation tag),
+     *  scaled down to PIC_WORK_MAX on its long side. */
+    function loadPictureFile(file, then) {
+        if (file.type && !/^image\//.test(file.type)) { toast("That file isn’t a picture. Use a photo (JPG or PNG).", true); return; }
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function () {
+            var w = img.naturalWidth, hh = img.naturalHeight, k = Math.min(1, PIC_WORK_MAX / Math.max(w, hh));
+            var c = document.createElement("canvas");
+            c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(hh * k));
+            var ctx = c.getContext("2d");
+            ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);   // a see-through PNG prints as if on white
+            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(img, 0, 0, c.width, c.height);
+            URL.revokeObjectURL(url);
+            addLog("Picture opened: " + (file.name || "photo") + " (" + w + " × " + hh + " px).");
+            then(c);
+        };
+        img.onerror = function () {
+            URL.revokeObjectURL(url);
+            toast("This picture can’t be opened here. Use a JPG or PNG photo.", true);
+        };
+        img.src = url;
+    }
+    /** Grey levels of part of a canvas, scaled to tw x th, with an automatic level stretch (1 % darkest -> black,
+     *  1 % lightest -> white) so a dim phone photo uses the full range. */
+    function greyFrom(canvas, crop, tw, th) {
+        var c = document.createElement("canvas"); c.width = tw; c.height = th;
+        var ctx = c.getContext("2d", { willReadFrequently: true });
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, tw, th);
+        ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(canvas, crop.x, crop.y, crop.w, crop.h, 0, 0, tw, th);
+        var d = ctx.getImageData(0, 0, tw, th).data, n = tw * th, g = new Uint8Array(n), hist = new Array(256).fill(0), i;
+        for (i = 0; i < n; i++) { var v = (77 * d[i * 4] + 150 * d[i * 4 + 1] + 29 * d[i * 4 + 2] + 128) >> 8; g[i] = v; hist[v]++; }
+        var lo = 0, hi = 255, acc = 0, cut = Math.floor(n * 0.01);
+        for (i = 0; i < 256; i++) { acc += hist[i]; if (acc > cut) { lo = i; break; } }
+        acc = 0;
+        for (i = 255; i >= 0; i--) { acc += hist[i]; if (acc > cut) { hi = i; break; } }
+        if (hi - lo > 24 && (lo > 0 || hi < 255)) {
+            for (i = 0; i < n; i++) { var t = Math.round((g[i] - lo) * 255 / (hi - lo)); g[i] = t < 0 ? 0 : (t > 255 ? 255 : t); }
+        }
+        var extreme = 0;
+        for (i = 0; i < n; i++) if (g[i] < 56 || g[i] > 200) extreme++;
+        return { g: g, w: tw, h: th, drawing: extreme / n >= 0.85 };
+    }
+    /** The grey picture stored in the label for a picture printed w x h dots: at least PIC_SRC_MIN on its long side,
+     *  never more pixels than the crop has. */
+    function makePictureSrc(mem, w, hh) {
+        var cr = mem.crop, k = Math.max(w / cr.w, hh / cr.h, PIC_SRC_MIN / Math.max(cr.w, cr.h));
+        k = Math.min(1, k);
+        var tw = Math.max(1, Math.round(cr.w * k)), th = Math.max(1, Math.round(cr.h * k));
+        if (tw * th > PIC_SRC_MAX) { var k2 = Math.sqrt(PIC_SRC_MAX / (tw * th)); tw = Math.max(1, Math.floor(tw * k2)); th = Math.max(1, Math.floor(th * k2)); }
+        var gr = greyFrom(mem.work, cr, tw, th);
+        return { src: { w: tw, h: th, g8: Core.bytesToB64(gr.g) }, drawing: gr.drawing };
+    }
+    function pictureAspect(el) {   // height / width of the picture as cropped
+        var m = S.pic[el.id];
+        if (m) return m.crop.h / m.crop.w;
+        if (el.src && el.src.w && el.src.h) return el.src.h / el.src.w;
+        return el.h / Math.max(1, el.w);
+    }
+    /** Set a picture's printed width (dots); the height follows the picture's shape. Both snap to whole picture dots. */
+    function setPictureSize(el, w) {
+        var pc = Core.pictureCellDots(S.eng);
+        var cw = Math.max(4, Math.round(w / pc)), ch = Math.max(4, Math.round(cw * pictureAspect(el)));
+        el.w = cw * pc; el.h = ch * pc;
+        var m = S.pic[el.id];
+        if (m) { var ms = makePictureSrc(m, el.w, el.h); if (ms.src.w !== (el.src && el.src.w) || ms.src.h !== (el.src && el.src.h)) el.src = ms.src; }
+    }
+    /** Biggest size (width in dots, keeping the shape) where the picture fits: in free space (avoid = true) or anywhere.
+     *  maxW caps the width. Returns { w, x, y } or null. */
+    function pictureBiggest(el, avoid, maxW) {
+        var geo = S.R.geo, pc = Core.pictureCellDots(S.eng), asp = pictureAspect(el);
+        var others = avoid ? othersBoxes(el.id) : [];
+        var hiC = Math.floor(Math.min(geo.w, maxW || geo.w) / pc), loC = 4, best = null;
+        function tryC(c) {
+            var w = c * pc, hh = Math.max(4, Math.round(c * asp)) * pc;
+            var sp = Core.Placement.findSpot(geo, w, hh, others, geo.band);
+            return sp ? { w: w, x: sp.x, y: sp.y } : null;
+        }
+        if (!tryC(loC)) return null;
+        while (loC <= hiC) {   // fits at loC; find the biggest that fits
+            var mid = Math.floor((loC + hiC) / 2), r = tryC(mid);
+            if (r) { best = r; loC = mid + 1; } else hiC = mid - 1;
+        }
+        return best || tryC(4);
+    }
+    /** Add a picture from a cropped photo (new), or put a new photo into an existing picture (replaceId). */
+    function placePicture(mem, replaceId, keepLook) {
+        var el = replaceId ? findEl(replaceId) : null;
+        if (el) {
+            S.pic[el.id] = mem;
+            var w0 = el.w;
+            setPictureSize(el, w0);
+            var made0 = makePictureSrc(mem, el.w, el.h);
+            el.src = made0.src;
+            if (!keepLook) el.look = made0.drawing ? "drawing" : "photo";   // a new picture: guess photo or drawing again
+            var it0 = (compute(), itemFor(el.id));
+            if (!it0.fits || S.V.problems.some(function (p) { return p.elementId === el.id && p.code === "overlap"; })) {
+                var f0 = pictureBiggest(el, true, w0) || pictureBiggest(el, false, w0);
+                if (f0) { setPictureSize(el, f0.w); el.x = f0.x; el.y = f0.y; }
+            }
+            addLog("Picture changed (" + el.w + " × " + el.h + " dots).");
+            S.selId = el.id; S.tab = "props";
+            commit();
+            return;
+        }
+        var probe = Core.newElement("picture", S.eng, {});
+        S.pic[probe.id] = mem;
+        var geo = S.R.geo;
+        var fit = pictureBiggest(probe, true, Math.round(geo.w * 0.7)), free = true;
+        if (!fit) { fit = pictureBiggest(probe, false, Math.round(geo.w * 0.7)); free = false; }
+        if (!fit) { delete S.pic[probe.id]; toast("A picture doesn’t fit on this label shape.", true); return; }
+        setPictureSize(probe, fit.w);
+        var made = makePictureSrc(mem, probe.w, probe.h);
+        probe.src = made.src;
+        probe.look = made.drawing ? "drawing" : "photo";
+        probe.x = fit.x; probe.y = fit.y; probe.hAlign = "none";
+        S.doc.elements.push(probe);
+        S.selId = probe.id; S.tab = "props";
+        addLog("Added Picture (" + (probe.look === "drawing" ? "drawing or logo" : "photo") + ", " + probe.w + " × " + probe.h + " dots).");
+        commit();
+        toast(free ? "Picture added. It prints as dots, exactly as shown." : "Picture added, but there is no free space for it: move or shrink something.", !free);
+    }
+    /** Add > Picture: take a photo (phones and tablets) or choose a picture. replaceId = put a new photo into that picture. */
+    function openPictureMenu(replaceId) {
+        var cards = [];
+        if (touchDevice()) cards.push(h("button", { class: "card piccard", type: "button", id: "pic-take", onclick: function () {
+            closeDialog(); pickImageFile(true, function (c) { openCropDialog(c, null, replaceId); }); } }, [
+            h("span", { class: "pico", html: icon("camera") }), h("div", { class: "n", text: "Take a photo" }), h("div", { class: "m", text: "Opens the camera." })]));
+        cards.push(h("button", { class: "card piccard", type: "button", id: "pic-choose", onclick: function () {
+            closeDialog(); pickImageFile(false, function (c) { openCropDialog(c, null, replaceId); }); } }, [
+            h("span", { class: "pico", html: icon("picture") }), h("div", { class: "n", text: "Choose a picture" }), h("div", { class: "m", text: touchDevice() ? "From your photos or files." : "A JPG or PNG file." })]));
+        openDialog(replaceId ? "Change the picture" : "Add a picture", [
+            h("div", { class: "cards" }, cards),
+            h("div", { class: "hint", text: "It prints as black dots, like a newspaper photo. Best results: good light, fill the frame, hold the phone straight above it. Black-and-white logos print sharpest." })
+        ], null, true);
+    }
+    /** Crop and turn. work = the photo canvas; crop0 = the crop to start from (cropping again); replaceId = the picture it goes into. */
+    function openCropDialog(work, crop0, replaceId, keepLook) {
+        var st = { work: work, crop: crop0 ? { x: crop0.x, y: crop0.y, w: crop0.w, h: crop0.h } : { x: 0, y: 0, w: work.width, h: work.height } };
+        var box = h("div", { class: "cropbox", id: "cropbox" });
+        var view = h("canvas", { class: "cropimg" });
+        var sel = h("div", { class: "cropsel", id: "cropsel" }, ["tl", "tr", "bl", "br"].map(function (k) { return h("span", { class: "ch " + k, "data-h": k }); }));
+        var shade = h("div", { class: "cropshade" });   // dims what is cut off; clipped to the photo, while the corner handles may overhang it
+        box.appendChild(view); box.appendChild(h("div", { class: "cropclip" }, [shade])); box.appendChild(sel);
+        var info = h("div", { class: "hint", id: "cropinfo" });
+        var scale = 1;
+        function layout() {
+            var maxW = Math.min(520, window.innerWidth - 100), maxH = Math.min(440, Math.round(window.innerHeight * 0.5));
+            scale = Math.min(maxW / st.work.width, maxH / st.work.height);
+            view.width = Math.round(st.work.width * scale); view.height = Math.round(st.work.height * scale);
+            view.getContext("2d").drawImage(st.work, 0, 0, view.width, view.height);
+            box.style.width = view.width + "px"; box.style.height = view.height + "px";
+            place();
+        }
+        function place() {
+            var c = st.crop;
+            [sel, shade].forEach(function (n) {
+                n.style.left = (c.x * scale) + "px"; n.style.top = (c.y * scale) + "px";
+                n.style.width = (c.w * scale) + "px"; n.style.height = (c.h * scale) + "px";
+            });
+            info.textContent = "Drag the box to move it, or a corner to resize it. " + Math.round(c.w) + " × " + Math.round(c.h) + " px kept.";
+        }
+        var drag = null;
+        box.addEventListener("pointerdown", function (e) {
+            var r = box.getBoundingClientRect(), px = (e.clientX - r.left) / scale, py = (e.clientY - r.top) / scale;
+            var hk = e.target && e.target.getAttribute && e.target.getAttribute("data-h");
+            var c = st.crop;
+            if (!hk && !(px >= c.x && px <= c.x + c.w && py >= c.y && py <= c.y + c.h)) return;
+            drag = { k: hk || "move", px: px, py: py, c0: { x: c.x, y: c.y, w: c.w, h: c.h } };
+            try { box.setPointerCapture(e.pointerId); } catch (er) { /* not supported */ }
+            e.preventDefault();
+        });
+        box.addEventListener("pointermove", function (e) {
+            if (!drag) return;
+            var r = box.getBoundingClientRect(), px = (e.clientX - r.left) / scale, py = (e.clientY - r.top) / scale;
+            var dx = px - drag.px, dy = py - drag.py, c0 = drag.c0, W = st.work.width, H = st.work.height, min = Math.max(16, 40 / scale);
+            var x0 = c0.x, y0 = c0.y, x1 = c0.x + c0.w, y1 = c0.y + c0.h;
+            if (drag.k === "move") {
+                var nx = Math.max(0, Math.min(W - c0.w, c0.x + dx)), ny = Math.max(0, Math.min(H - c0.h, c0.y + dy));
+                st.crop = { x: nx, y: ny, w: c0.w, h: c0.h };
+            } else {
+                if (drag.k.charAt(1) === "l") x0 = Math.max(0, Math.min(x1 - min, x0 + dx)); else x1 = Math.min(W, Math.max(x0 + min, x1 + dx));
+                if (drag.k.charAt(0) === "t") y0 = Math.max(0, Math.min(y1 - min, y0 + dy)); else y1 = Math.min(H, Math.max(y0 + min, y1 + dy));
+                st.crop = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+            }
+            place();
+            e.preventDefault();
+        });
+        function endDrag() { drag = null; }
+        box.addEventListener("pointerup", endDrag); box.addEventListener("pointercancel", endDrag);
+        function turn() {
+            var c = document.createElement("canvas"); c.width = st.work.height; c.height = st.work.width;
+            var ctx = c.getContext("2d");
+            ctx.translate(c.width, 0); ctx.rotate(Math.PI / 2);
+            ctx.drawImage(st.work, 0, 0);
+            var k = st.crop, H0 = st.work.height;
+            st.crop = { x: H0 - (k.y + k.h), y: k.x, w: k.h, h: k.w };   // the same part of the photo, turned with it
+            st.work = c;
+            layout();
+        }
+        var dlg = openDialog("Crop the picture", [
+            h("div", { class: "cropwrap" }, [box]),
+            info,
+            h("div", { class: "row" }, [
+                h("button", { class: "btn", type: "button", id: "crop-turn", html: icon("turn") + "Turn", onclick: turn }),
+                h("button", { class: "btn", type: "button", id: "crop-all", text: "Whole picture", onclick: function () { st.crop = { x: 0, y: 0, w: st.work.width, h: st.work.height }; place(); } })
+            ])
+        ], [
+            h("button", { class: "btn", type: "button", text: "Cancel", onclick: closeDialog }),
+            h("span", { class: "sp" }),
+            h("button", { class: "btn primary", type: "button", id: "crop-use", text: replaceId ? "Use this picture" : "Put it on the label", onclick: function () {
+                var c = st.crop, mem = { work: st.work, crop: { x: Math.round(c.x), y: Math.round(c.y), w: Math.max(1, Math.round(c.w)), h: Math.max(1, Math.round(c.h)) } };
+                closeDialog();
+                placePicture(mem, replaceId, keepLook);
+            } })
+        ], true);
+        dlg.classList.add("cropdlg");
+        layout();
+    }
+    /** The picture's grey levels as a small canvas (the properties panel thumbnail). */
+    function pictureThumb(el, maxW, maxH) {
+        var ps = Core.pictureSource(el.src);
+        var c = h("canvas", { class: "picthumb", id: "picThumb" });
+        if (!ps) { c.width = 1; c.height = 1; return c; }
+        var t = document.createElement("canvas"); t.width = ps.w; t.height = ps.h;
+        var tctx = t.getContext("2d"), im = tctx.createImageData(ps.w, ps.h);
+        for (var i = 0; i < ps.g.length; i++) { im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = ps.g[i]; im.data[i * 4 + 3] = 255; }
+        tctx.putImageData(im, 0, 0);
+        var k = Math.min(maxW / ps.w, maxH / ps.h);
+        c.width = Math.max(1, Math.round(ps.w * k)); c.height = Math.max(1, Math.round(ps.h * k));
+        var ctx = c.getContext("2d"); ctx.imageSmoothingQuality = "high"; ctx.drawImage(t, 0, 0, c.width, c.height);
+        return c;
+    }
+    /** Crop or turn again: from the full photo while this label is open, otherwise from the picture kept in the label. */
+    function recropPicture(el) {
+        var m = S.pic[el.id];
+        if (m) { openCropDialog(m.work, m.crop, el.id, true); return; }
+        var ps = Core.pictureSource(el.src);
+        if (!ps) { openPictureMenu(el.id); return; }
+        var c = document.createElement("canvas"); c.width = ps.w; c.height = ps.h;
+        var ctx = c.getContext("2d"), im = ctx.createImageData(ps.w, ps.h);
+        for (var i = 0; i < ps.g.length; i++) { im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = ps.g[i]; im.data[i * 4 + 3] = 255; }
+        ctx.putImageData(im, 0, 0);
+        openCropDialog(c, null, el.id, true);
+    }
+    function propsPicture(box, el, it) {
+        var has = !!Core.pictureSource(el.src);
+        box.appendChild(sec("Picture", has ? el.src.w + " × " + el.src.h + " px kept" : null, [
+            has ? h("div", { class: "picrow" }, [pictureThumb(el, 132, 110), h("div", { class: "hint", text: "This is the picture as the label keeps it. The label on the left shows the dots that print." })]) : null,
+            h("div", { class: "row wrap" }, [
+                touchDevice() ? h("button", { class: "btn" + (has ? "" : " primary"), type: "button", id: "f-pic", html: icon("camera") + (has ? "New photo" : "Take a photo"), onclick: function () {
+                    pickImageFile(true, function (c) { openCropDialog(c, null, el.id); }); } }) : null,
+                h("button", { class: "btn" + (has || touchDevice() ? "" : " primary"), type: "button", id: touchDevice() ? "pic-other" : "f-pic", html: icon("picture") + (has ? "Another picture" : "Choose a picture"), onclick: function () {
+                    pickImageFile(false, function (c) { openCropDialog(c, null, el.id); }); } }),
+                has ? h("button", { class: "btn", type: "button", id: "pic-crop", html: icon("crop") + "Crop or turn", onclick: function () { recropPicture(el); } }) : null
+            ])
+        ]));
+        box.appendChild(sec("Look", null, [seg([{ value: "photo", label: "Photo" }, { value: "drawing", label: "Drawing or logo" }], el.look,
+            function (v) { el.look = v; commit(); }),
+            h("div", { class: "hint", text: el.look === "drawing" ? "Sharp black and white. Best for logos, signs and line drawings." : "Dots spread out to show the greys. Best for photos." })]));
+        var b = el.bright || 0, c = el.contrast || 0;
+        box.appendChild(sec("Lighter or darker", null, [stepper("picBright", b === 0 ? "As taken" : (b > 0 ? "Lighter +" + b : "Darker " + (-b)), null,
+            function () { el.bright = Math.max(-100, b - 10); commit(); }, function () { el.bright = Math.min(100, b + 10); commit(); }, b <= -100, b >= 100),
+            h("div", { class: "hint", text: "− darker, + lighter. Thermal labels print a little darker than the screen: if the test print looks heavy, go lighter." })]));
+        box.appendChild(sec("Contrast", null, [stepper("picContrast", c === 0 ? "Normal" : (c > 0 ? "More +" + c : "Less " + (-c)), null,
+            function () { el.contrast = Math.max(-50, c - 10); commit(); }, function () { el.contrast = Math.min(100, c + 10); commit(); }, c <= -50, c >= 100)]));
+        box.appendChild(sec("Black and white", null, [seg([{ value: false, label: "Normal" }, { value: true, label: "Reversed" }], !!el.invert,
+            function (v) { el.invert = v; commit(); })]));
+        var pc = Core.pictureCellDots(S.eng), step = Math.max(pc, Math.round(0.05 * S.eng.dpi / pc) * pc);
+        var bigger = JSON.parse(JSON.stringify(el)); bigger.w = el.w + step; bigger.h = Math.max(4, Math.round((el.w + step) / pc * pictureAspect(el))) * pc;
+        box.appendChild(sec("Size", fmtLenShort(it.w) + " × " + fmtLen(it.h), [
+            stepper("picSize", fmtLen(it.w) + " wide", it.w + " × " + it.h + " dots",
+                function () { setPictureSize(el, Math.max(4 * pc, el.w - step)); commit(); },
+                function () { setPictureSize(el, el.w + step); compute(); var i2 = itemFor(el.id); if (!i2.fits) placeFree(el); commit(); },
+                el.w <= 4 * pc, !Core.Placement.fitsAnywhere(S.R.geo, bigger.w, bigger.h)),
+            h("div", { class: "row wrap" }, [
+                h("button", { class: "btn small", type: "button", id: "pic-biggest", text: "Biggest that fits", onclick: function () {
+                    var f = pictureBiggest(el, true, S.R.geo.w);
+                    if (!f) { toast("There is no free space to make it bigger. Move or shrink something.", true); return; }
+                    setPictureSize(el, f.w); el.x = f.x; el.y = f.y; el.hAlign = "none"; commit(); } }),
+                (b || c || el.invert) ? h("button", { class: "btn small", type: "button", id: "pic-reset", text: "Back to as taken", onclick: function () {
+                    el.bright = 0; el.contrast = 0; el.invert = false; commit(); } }) : null
+            ])
+        ]));
+    }
 
     function propsShape(box, el) {
         box.appendChild(sec("Shape", null, [seg([{ value: "hline", label: "H line" }, { value: "vline", label: "V line" }, { value: "rect", label: "Box" }, { value: "ellipse", label: "Ellipse" }],
@@ -6198,6 +6712,7 @@ if (typeof module !== "undefined") { module.exports = H3; }
                 if (t === "field") { openFieldMenu(b); return; }
                 if (t === "barcode") { openBarcodeMenu(); return; }
                 if (t === "qr") { openQrMenu(); return; }
+                if (t === "picture") { openPictureMenu(null); return; }
                 addElement(t);
             });
         });

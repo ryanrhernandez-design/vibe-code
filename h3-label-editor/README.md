@@ -1,4 +1,4 @@
-# H3 Label Editor Simulator (rev I, 10.15.26)
+# H3 Label Editor Simulator (rev J, 10.16.26)
 
 A working browser simulator of the H3 fruit-label editor. It shows the label layout and generates real barcodes and QR codes:
 
@@ -6,10 +6,13 @@ A working browser simulator of the H3 fruit-label editor. It shows the label lay
 - UPC-A, UPC-E, EAN-13 and EAN-8
 - Code 128 and GS1-128
 - QR codes
+- pictures from the phone camera, printed as direct-thermal dots
 
 The page also has the engineering controls, a 1-bit 300 dpi print preview, a test print and send-to-lanes.
 
 **Open it:** https://ryanrhernandez-design.github.io/vibe-code/h3-label-editor/
+
+**New in rev J:** pictures. Add → Picture → Take a photo opens the phone's camera (or Choose a picture). Crop it, turn it, and it goes on the label at the biggest size that fits. It prints the direct-thermal way: black dots only, in 2 × 2-dot blocks. Photo spreads the dots to show greys; Drawing or logo is sharp black and white. Lighter or darker, contrast, reversed and size are in the Picture panel. The label file keeps the cropped picture; the original photo stays on your phone.
 
 **New in rev I:** web addresses in QR codes work on a phone. The Web address box brings up the phone's web-address keyboard (no capitals, no autocorrect, `.com` and `/` keys); type `westpakavocado.com` and `https://` is added for you, and "A phone opens" shows exactly what the QR holds. A longer address makes the QR modules smaller so it still fits the label, and they grow back when the address gets shorter.
 
