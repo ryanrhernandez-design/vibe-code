@@ -95,7 +95,7 @@
 </div>
 <script>
 (() => {
-  const VERSION = 'v21'; // shown on the title screen so you know which build you're playing
+  const VERSION = 'v22'; // shown on the title screen so you know which build you're playing
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const nameBtn = document.getElementById('nameBtn');
@@ -208,7 +208,15 @@
   let ssCharges = 0, ssActive = 0, ssUnlockT = 0; // super saiyan inventory & timers
   best = +(localStorage.getItem('flappyKittyBest') || 0);
 
+  // two-player duel on one screen: left half flaps Cass, right half flaps Ginger
+  let versus = false, p2 = null, vsWinner = 0, vsT = 0, vsBanner = null, modeBtn = null;
+  const P2_PAL = { fur: '#f2a445', dark: '#c4741c', cream: '#fff3df', eye: '#4f9fe0' };
+  const P_NAME = k => (k === cass ? 'Cass' : 'Ginger');
+  // whoever the celebrations should burst from
+  const star = () => (versus && cass.dead && !p2.dead ? p2 : cass);
+
   const phase = () => {
+    if (versus) return [1, 2, 4, 5][Math.floor(score / 30) % 4]; // the duel tours the dodge worlds
     if (state === ST.OUTRO) return outroFrom; // keep the finished level's world during the landing
     return score < LVL2_AT ? 1 : score < LVL3_AT ? 2 : score < LVL4_AT ? 3 : score < LVL5_AT ? 4 : 5;
   };
@@ -317,11 +325,15 @@
   }
 
   function reset() {
-    cass = { x: W * 0.3, y: H * 0.45, vy: 0, rot: 0, fin: 0, tail: 0, flame: 0, slice: 0 };
+    cass = { x: W * (versus ? 0.36 : 0.3), y: H * 0.45, vy: 0, rot: 0, fin: 0, tail: 0, flame: 0, slice: 0, dead: false };
+    p2 = { x: cass.x - 58 * S(), y: H * 0.45, vy: 0, rot: 0, fin: 0, tail: 2, flame: 0, slice: 0, dead: false, pal: P2_PAL };
+    vsWinner = 0;
+    vsT = 0;
+    vsBanner = null;
     corals = [];
     steels = [];
     debris = [];
-    score = START;
+    score = versus ? 0 : START;
     t = 0;
     deathT = 0;
     flashT = 0;
@@ -334,7 +346,7 @@
     molten = [];
     bgScroll = 0;
     // debug starts get the charges they would have earned along the way
-    ssCharges = (START >= 15 ? 1 : 0) + (START >= 75 ? 1 : 0);
+    ssCharges = versus ? 0 : (START >= 15 ? 1 : 0) + (START >= 75 ? 1 : 0);
     ssActive = 0;
     ssUnlockT = 0;
     clearTimeout(ssLoopTimer);
@@ -564,16 +576,20 @@
       }).catch(() => {});
     } catch (e) { /* logging is best-effort */ }
   }
-  function tapAction() {
+  // who: 1 = Cass, 2 = Ginger (only matters during a two-player duel)
+  function tapAction(who = 1) {
     if (nameOverlay.classList.contains('open')) return;
     if (state === ST.READY) {
       state = ST.PLAYING;
       cass.vy = FLAP_VY * S();
+      if (versus) p2.vy = FLAP_VY * S();
       doTapFx();
     } else if (state === ST.PLAYING) {
-      cass.vy = FLAP_VY * S();
-      cass.fin = 1;
-      doTapFx();
+      const k = versus && who === 2 ? p2 : cass;
+      if (k.dead) return;
+      k.vy = FLAP_VY * S();
+      k.fin = 1;
+      doTapFx(k);
     } else if (state === ST.SPLASH) {
       if (splashT > 0.8) resumeFromSplash(); // must read the screen first
     } else if (state === ST.DEAD && deathT > 0.6) {
@@ -582,43 +598,62 @@
       reset();
     }
   }
-  function doTapFx() {
+  function doTapFx(k = cass) {
     const ph = phase();
     if (ph === 2) {
-      cass.flame = 1;
+      k.flame = 1;
       sndRocket();
     } else if (ph === 3) {
-      cass.slice = 0.25;
+      k.slice = 0.25;
       spawnFart();
       sndFart();
       sndSlice();
     } else if (ph === 4) {
       sndRave();
-      burstParticles(cass.x, cass.y, ['#00ffd0', '#ff00d0', '#ffe600'], 6, 0.6);
+      burstParticles(k.x, k.y, ['#00ffd0', '#ff00d0', '#ffe600'], 6, 0.6);
     } else if (ph === 5) {
       sndTrumpet();
-      burstParticles(cass.x, cass.y, ['#ffd94a', '#fff'], 5, 0.5);
+      burstParticles(k.x, k.y, ['#ffd94a', '#fff'], 5, 0.5);
     } else {
       sndFlap();
     }
   }
+  // the 1 PLAYER / 2 PLAYERS switch on the title screen
+  function tryModeBtn(cx, cy) {
+    if (state !== ST.READY || !modeBtn || nameOverlay.classList.contains('open')) return false;
+    if (cx < modeBtn.x || cx > modeBtn.x + modeBtn.w || cy < modeBtn.y || cy > modeBtn.y + modeBtn.h) return false;
+    versus = !versus;
+    reset();
+    sndScore();
+    return true;
+  }
+  const sideOf = cx => (cx < W / 2 ? 1 : 2);
   const onUI = e => e.target !== canvas; // taps on the name button/overlay don't count
   window.addEventListener('touchstart', e => {
     if (onUI(e)) return;
     e.preventDefault();
+    if (versus && state === ST.PLAYING) {
+      // every new finger flaps the cat whose half of the screen it landed on
+      for (let i = 0; i < e.changedTouches.length; i++) tapAction(sideOf(e.changedTouches[i].clientX));
+      return;
+    }
     if (e.touches && e.touches.length >= 2) { activateSS(); return; } // 2-finger tap transforms
     const tch = e.touches && e.touches[0];
+    if (tch && tryModeBtn(tch.clientX, tch.clientY)) return;
     if (tch && tryActivateAt(tch.clientX, tch.clientY)) return; // tapping the ⚡ button transforms
     tapAction();
   }, { passive: false });
   window.addEventListener('mousedown', e => {
     if (onUI(e)) return;
+    if (tryModeBtn(e.clientX, e.clientY)) return;
     if (tryActivateAt(e.clientX, e.clientY)) return;
-    tapAction();
+    tapAction(sideOf(e.clientX));
   });
   window.addEventListener('keydown', e => {
     if (document.activeElement === nameInput) return;
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); tapAction(); }
+    // duel keys: W or Space flaps Cass, the up arrow flaps Ginger
+    if (e.code === 'Space' || e.code === 'KeyW') { e.preventDefault(); tapAction(1); }
+    if (e.code === 'ArrowUp') { e.preventDefault(); tapAction(2); }
     if (e.code === 'KeyS') { e.preventDefault(); activateSS(); }
   });
 
@@ -656,7 +691,7 @@
     outroSlashed = false;
     outroBeatN = -1;
     outroFlash = 0;
-    outroStart = { x: cass.x, y: cass.y };
+    outroStart = { x: star().x, y: star().y };
     anemone.x = W * 0.62;
     corals = [];
     steels = [];
@@ -691,7 +726,7 @@
 
   // ---------- Super Saiyan power ----------
   function activateSS() {
-    if (state !== ST.PLAYING || ssActive > 0 || ssCharges <= 0) return;
+    if (versus || state !== ST.PLAYING || ssActive > 0 || ssCharges <= 0) return;
     ssCharges--;
     ssActive = 3; // invincible for the next 3 points
     if (ssGain) ssGain.gain.value = 1; // riff comes back at full power
@@ -736,6 +771,98 @@
     }
   }
 
+  // ---------- Two-player duel ----------
+  function onScoreVersus() {
+    score++;
+    sndScore();
+    burstSparkles();
+    const newWorld = score % 30 === 0, step = score % 15 === 0;
+    if (newWorld) { initAmbient(); sndChest(); }
+    else if (step) snd1Up();
+    if (score % 5 === 0) {
+      launchFireworks(!step);
+      launchHeart();
+    }
+  }
+  function killPlayer(k) {
+    if (k.dead) return;
+    k.dead = true;
+    k.diedT = t;
+    k.vy = Math.min(k.vy, 0);
+    sndHit();
+    setTimeout(sndMeow, 250);
+    const other = k === cass ? p2 : cass;
+    if (other.dead) {
+      // last cat flying wins; bonking on the same frame is a tie
+      vsWinner = other.diedT === k.diedT ? 0 : (k === cass ? 1 : 2);
+      state = ST.DEAD;
+      deathT = 0;
+      flashT = 1;
+      vsBanner = null;
+      if (vsWinner) setTimeout(sndFireworks, 600);
+    } else {
+      vsBanner = { msg: `${P_NAME(k)} is out!`, sub: `${P_NAME(other)} wins — keep flying!`, t: 2.4 };
+    }
+  }
+  function settleFallen(k, dt, scroll) {
+    const s = S(), floor = H - GROUND_H * s - CASS_R * s;
+    k.rot = Math.min(k.rot + dt * 6, Math.PI / 2);
+    if (k.y >= floor) {
+      k.y = floor;
+      k.vy = 0;
+      if (scroll) k.x -= coralSpeed() * s * dt; // left behind as the world scrolls on
+    }
+  }
+  function updateVersus(dt) {
+    const s = S(), r = CASS_R * s, groundY = H - GROUND_H * s, ph = phase();
+    vsT += dt;
+    if (vsBanner && (vsBanner.t -= dt) <= 0) vsBanner = null;
+    bgScroll += coralSpeed() * s * dt * 0.5;
+
+    for (const k of [cass, p2]) {
+      k.vy += GRAVITY * s * dt;
+      k.y += k.vy * dt;
+      if (k.dead) { settleFallen(k, dt, true); continue; }
+      k.rot = Math.max(-0.45, Math.min(1.2, k.vy / (600 * s)));
+      k.fin = Math.max(0, k.fin - dt * 4);
+      if (k.y - r < 0) { k.y = r; k.vy = 50; }
+      if (k.y + r > groundY) { k.y = groundY - r; killPlayer(k); }
+    }
+
+    for (const p of corals) {
+      p.x -= coralSpeed() * s * dt;
+      if (ph === 4) {
+        p.gap = p.gap0 * (1 + 0.12 * Math.sin(t * 4.4 + p.seed));
+        p.gapY = p.gapY0 + (p.gap0 - p.gap) / 2;
+      } else if (ph === 5) {
+        p.gapY = p.gapY0 + Math.sin(t * 1.6 + p.seed) * 26 * s;
+      }
+    }
+    if (corals.length === 0 || corals[corals.length - 1].x < W - CORAL_SPACING * s) {
+      spawnCoral(Math.max(W + 40, corals.length ? corals[corals.length - 1].x + CORAL_SPACING * s : W + 40));
+    }
+    while (corals.length && corals[0].x < -CORAL_W * s - 20) corals.shift();
+
+    const pw = CORAL_W * s;
+    for (const p of corals) {
+      const alive = [cass, p2].filter(k => !k.dead);
+      if (!alive.length) break;
+      // a tower counts once every cat still flying has cleared it
+      if (!p.scored && p.x + pw < Math.min(...alive.map(k => k.x))) {
+        p.scored = true;
+        onScoreVersus();
+      }
+      for (const k of alive) {
+        if (k.x + r > p.x && k.x - r < p.x + pw &&
+            (k.y - r < p.gapY || k.y + r > p.gapY + p.gap)) killPlayer(k);
+      }
+    }
+
+    updateSparkles(dt);
+    updateFireworks(dt);
+    updateEffects(dt);
+  }
+
   function burstParticles(x, y, colors, n = 20, speed = 1) {
     const s = S();
     for (let i = 0; i < n; i++) {
@@ -759,7 +886,7 @@
       const a = (i / 26) * Math.PI * 2 + Math.random() * 0.3;
       const sp = (90 + Math.random() * 180) * s;
       fireworks.push({
-        x: cass.x, y: cass.y,
+        x: star().x, y: star().y,
         vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
         life: 0.9 + Math.random() * 0.5,
         color: colors[i % colors.length]
@@ -768,7 +895,7 @@
   }
   function launchHeart() {
     // a red heart inflates from Cass like a balloon, then pops into shards
-    fwTexts.push({ x: cass.x, y: cass.y, t: 0, popped: false });
+    fwTexts.push({ x: star().x, y: star().y, t: 0, popped: false });
   }
   function updateFireworks(dt) {
     const s = S();
@@ -947,6 +1074,8 @@
     cass.tail += dt * 7;
     cass.flame = Math.max(0, cass.flame - dt * 3);
     cass.slice = Math.max(0, cass.slice - dt);
+    p2.tail += dt * 7;
+    p2.flame = Math.max(0, p2.flame - dt * 3);
     ssUnlockT = Math.max(0, ssUnlockT - dt);
     if (ssGain) {
       // guitar volume follows the remaining power: 3 points loud, 1 point faint
@@ -965,6 +1094,8 @@
     if (state === ST.READY) {
       cass.y = H * 0.45 + Math.sin(t * 3) * 12 * s;
       cass.fin = (Math.sin(t * 8) + 1) / 2;
+      p2.y = H * 0.45 + Math.sin(t * 3 + 1.6) * 12 * s;
+      p2.fin = (Math.sin(t * 8 + 1.6) + 1) / 2;
       return;
     }
 
@@ -1085,7 +1216,13 @@
       deathT += dt;
       flashT = Math.max(0, flashT - dt * 3);
       const groundY = H - GROUND_H * s;
-      if (cass.y < groundY - CASS_R * s) {
+      if (versus) {
+        for (const k of [cass, p2]) {
+          k.vy += GRAVITY * s * dt;
+          k.y += k.vy * dt;
+          settleFallen(k, dt, false);
+        }
+      } else if (cass.y < groundY - CASS_R * s) {
         cass.vy += GRAVITY * s * dt;
         cass.y += cass.vy * dt;
         cass.rot = Math.min(cass.rot + dt * 6, Math.PI / 2);
@@ -1098,6 +1235,7 @@
     }
 
     // PLAYING
+    if (versus) { updateVersus(dt); return; }
     bgScroll += coralSpeed() * s * dt * 0.5; // background CASS drifts at half speed
     cass.vy += GRAVITY * s * dt;
     cass.y += cass.vy * dt;
@@ -1246,7 +1384,7 @@
     for (let i = 0; i < 8; i++) {
       const a = Math.random() * Math.PI * 2;
       sparkles.push({
-        x: cass.x, y: cass.y,
+        x: star().x, y: star().y,
         vx: Math.cos(a) * (60 + Math.random() * 120),
         vy: Math.sin(a) * (60 + Math.random() * 120) - 60,
         life: 0.6 + Math.random() * 0.3
@@ -1634,8 +1772,7 @@
   }
 
   // ---------- Drawing: Cass the cat (and his vehicles/weapons) ----------
-  function drawCass() {
-    const k = cass;
+  function drawCass(k = cass) {
     const s = S();
     const ph = phase();
 
@@ -1685,7 +1822,7 @@
       drawCrown();
       ctx.restore();
     }
-    if (ph === 4 && state !== ST.DEAD) drawShades();
+    if (ph === 4 && state !== ST.DEAD && !k.dead) drawShades();
     if (ph === 3) drawKatana(k);
 
     ctx.restore();
@@ -1844,9 +1981,11 @@
 
   function drawCatBody(k) {
     // Cass: gray-brown tabby, white bib + socks, green eyes
-    const fur = '#a08c74';
-    const furDark = '#5f4f3c';
-    const cream = '#fdf7ec';
+    // (a second player brings their own coat colours in k.pal)
+    const pal = k.pal || { fur: '#a08c74', dark: '#5f4f3c', cream: '#fdf7ec', eye: '#9db657' };
+    const fur = pal.fur;
+    const furDark = pal.dark;
+    const cream = pal.cream;
 
     // tail (wavy, with tabby rings)
     ctx.lineCap = 'round';
@@ -1962,7 +2101,7 @@
     ctx.fill();
 
     // eyes
-    const dead = state === ST.DEAD;
+    const dead = k.dead || (!versus && state === ST.DEAD);
     if (dead) {
       ctx.strokeStyle = '#3a2a16';
       ctx.lineWidth = 2;
@@ -1970,7 +2109,7 @@
       ctx.beginPath(); ctx.moveTo(15, -10); ctx.lineTo(20, -5); ctx.moveTo(20, -10); ctx.lineTo(15, -5); ctx.stroke();
     } else {
       // big green eyes like the real Cass
-      ctx.fillStyle = '#9db657';
+      ctx.fillStyle = pal.eye;
       ctx.beginPath(); ctx.arc(8.5, -7.5, 3, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(17.5, -7.5, 3, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#26221a';
@@ -2199,7 +2338,32 @@
         ctx.fillRect(0, 0, W, H);
       }
       text(score, W / 2, safeTop + 30 * s, 52 * s);
-      text(`LVL ${phase()}`, W / 2, safeTop + 62 * s, 16 * s, '#cdeef5');
+      text(versus ? '2 PLAYER DUEL' : `LVL ${phase()}`, W / 2, safeTop + 62 * s, 16 * s, '#cdeef5');
+
+      if (versus) {
+        // each player's corner: name while flying, struck out once bonked
+        const tagY = H - GROUND_H * s * 0.45;
+        text(cass.dead ? '✖ Cass' : '◀ CASS', W * 0.25, tagY, 17 * s, cass.dead ? '#9aa0ad' : '#ffd94a');
+        text(p2.dead ? 'Ginger ✖' : 'GINGER ▶', W * 0.75, tagY, 17 * s, p2.dead ? '#9aa0ad' : '#ffb45c');
+        // opening seconds: show whose half of the screen is whose
+        if (vsT < 3.5) {
+          ctx.globalAlpha = Math.min(1, (3.5 - vsT) / 0.6) * 0.8;
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2 * s;
+          ctx.setLineDash([10 * s, 10 * s]);
+          ctx.beginPath(); ctx.moveTo(W / 2, H * 0.2); ctx.lineTo(W / 2, H - GROUND_H * s); ctx.stroke();
+          ctx.setLineDash([]);
+          text('tap this side', W * 0.25, H * 0.8, 15 * s);
+          text('tap this side', W * 0.75, H * 0.8, 15 * s);
+          ctx.globalAlpha = 1;
+        }
+        if (vsBanner) {
+          ctx.globalAlpha = Math.min(1, vsBanner.t / 0.4);
+          text(vsBanner.msg, W / 2, H * 0.3, 28 * s, '#ff8b6b');
+          text(vsBanner.sub, W / 2, H * 0.36, 17 * s);
+          ctx.globalAlpha = 1;
+        }
+      }
 
       // unlock banner flashes with the how-to
       if (ssUnlockT > 0 && Math.floor(ssUnlockT * 3) % 3 !== 0) {
@@ -2236,8 +2400,24 @@
       text("Cass' Tappy", W / 2, H * 0.19, 40 * s, '#ffd94a');
       text('Adventure', W / 2, H * 0.26, 40 * s, '#ffd94a');
       text('🐱', W / 2, H * 0.32, 26 * s);
-      text('Tap to flap!', W / 2, H * 0.62, 26 * s);
-      if (best > 0) text(`Best: ${best}`, W / 2, H * 0.68, 20 * s, '#cdeef5');
+      if (versus) {
+        text('Cass vs Ginger — last cat flying wins!', W / 2, H * 0.58, Math.min(19 * s, W * 0.046));
+        text('◀ Cass: tap the LEFT half', W / 2, H * 0.635, 17 * s, '#ffd94a');
+        text('Ginger: tap the RIGHT half ▶', W / 2, H * 0.68, 17 * s, '#ffb45c');
+      } else {
+        text('Tap to flap!', W / 2, H * 0.62, 26 * s);
+        if (best > 0) text(`Best: ${best}`, W / 2, H * 0.68, 20 * s, '#cdeef5');
+      }
+      // mode switch
+      const bw = 200 * s, bh = 44 * s, bx = W / 2 - bw / 2, by = H * 0.775 - bh / 2;
+      ctx.fillStyle = versus ? 'rgba(193, 39, 45, 0.85)' : 'rgba(13, 50, 90, 0.75)';
+      roundRect(bx, by, bw, bh, bh / 2);
+      ctx.strokeStyle = '#ffd94a';
+      ctx.lineWidth = 2 * s;
+      ctx.stroke();
+      text(versus ? '👥 2 PLAYERS' : '👤 1 PLAYER', W / 2, by + bh / 2, 19 * s);
+      text(versus ? 'tap here for 1 player' : 'tap here for 2 players', W / 2, by + bh + 14 * s, 13 * s, '#cdeef5');
+      modeBtn = { x: bx, y: by, w: bw, h: bh };
       text(VERSION, W / 2, H * 0.95, 13 * s, 'rgba(255,255,255,0.55)', 'rgba(0,0,0,0.25)');
     } else if (state === ST.OUTRO) {
       const pop = Math.max(0.2, Math.min(1, outroT / 0.4));
@@ -2299,12 +2479,19 @@
       if (deathT > 0.4) {
         ctx.fillStyle = 'rgba(0,0,0,0.45)';
         ctx.fillRect(0, 0, W, H);
-        text('Meow... Game Over', W / 2, H * 0.2, 36 * s, '#ff8b6b');
-        text(`Score: ${score}`, W / 2, H * 0.29, 30 * s);
-        text(`Best: ${best}`, W / 2, H * 0.35, 22 * s, '#ffd94a');
-        if (score >= best && score > 0 && !START) text('New record! 👑', W / 2, H * 0.405, 20 * s, '#aef1b8');
+        if (versus) {
+          const head = vsWinner === 1 ? 'CASS WINS! 🏆' : vsWinner === 2 ? 'GINGER WINS! 🏆' : "IT'S A TIE! 🤝";
+          text(head, W / 2, H * 0.26, Math.min(40 * s, W * 0.09), vsWinner === 2 ? '#ffb45c' : '#ffd94a');
+          text(vsWinner ? 'Last cat flying' : 'You bonked at the same moment', W / 2, H * 0.34, 20 * s);
+          text(`Towers cleared: ${score}`, W / 2, H * 0.44, 26 * s, '#aef1b8');
+        } else {
+          text('Meow... Game Over', W / 2, H * 0.2, Math.min(36 * s, W * 0.085), '#ff8b6b');
+          text(`Score: ${score}`, W / 2, H * 0.29, 30 * s);
+          text(`Best: ${best}`, W / 2, H * 0.35, 22 * s, '#ffd94a');
+          if (score >= best && score > 0 && !START) text('New record! 👑', W / 2, H * 0.405, 20 * s, '#aef1b8');
+        }
 
-        const lb = lbTop().slice(0, 5);
+        const lb = versus ? [] : lbTop().slice(0, 5);
         if (lb.length) {
           text(remoteLB ? '🌍 Global Leaderboard' : '🏆 Leaderboard', W / 2, H * 0.47, 22 * s, '#ffd94a');
           lb.forEach((e, i) => {
@@ -2315,7 +2502,7 @@
         }
 
         if (deathT > 0.6 && Math.floor(deathT * 2) % 2 === 0) {
-          text('Tap to try again', W / 2, H * 0.79, 22 * s);
+          text(versus ? 'Tap for a rematch' : 'Tap to try again', W / 2, H * 0.79, 22 * s);
         }
       }
     }
@@ -2335,7 +2522,8 @@
     drawGround();
     drawAnemone(false); // the golden throne rises behind Cass during outros
     drawSparkles();
-    drawCass();
+    if (versus) drawCass(p2);
+    drawCass(cass);
     drawAnemone(true); // front fronds wrap around the landed king
     drawFireworks();
     drawUI();
